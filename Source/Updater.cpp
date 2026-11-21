@@ -69,7 +69,8 @@ public:
 class Updater : public Thread, private Timer
 {
 public:
-    Updater() : Thread ("Ceamakito update") { startThread(); startTimer (100); }
+    explicit Updater (bool manualCheck) : Thread ("Ceamakito update"), manual (manualCheck) { startThread(); startTimer (100); }
+    bool isFinished() const { return finished; }
     ~Updater() override { signalThreadShouldExit(); stopThread (5000); }
 
     void run() override
@@ -80,7 +81,7 @@ public:
                                                  .withConnectionTimeoutMs (10000)
                                                  .withNumRedirectsToFollow (5));
         if (stream == nullptr)
-            return finish (State::nothing);
+            return finish (State::failed);
 
         auto json = JSON::parse (stream->readEntireStreamAsString());
         const String tag = json["tag_name"].toString();
@@ -98,7 +99,7 @@ public:
         // nu incerc la nesfarsit aceeasi actualizare daca n-a mers
         auto mark = File::getSpecialLocation (File::userApplicationDataDirectory)
                         .getChildFile ("Ceamakito's toy").getChildFile ("actualizare.txt");
-        if (mark.existsAsFile() && mark.loadFileAsString().trim() == tag
+        if (! manual && mark.existsAsFile() && mark.loadFileAsString().trim() == tag
             && Time::getCurrentTime() - mark.getLastModificationTime() < RelativeTime::hours (6))
             return finish (State::nothing);
 
@@ -171,6 +172,11 @@ private:
             return;
 
         stopTimer();
+        finished = true;
+        if (manual && s == State::nothing)
+            say (ro ("Ai ultima versiune."));
+        if (manual && s == State::failed && window == nullptr)
+            say (ro ("Nu am putut verifica actualizările. Verifică internetul."));
         if (s == State::reaperOpen)
             say (ro ("Există o versiune nouă de Ceamakito's toy. Închide REAPER și deschide din nou aplicația, ca să se actualizeze."));
 
@@ -186,6 +192,8 @@ private:
         window.reset();
     }
 
+    const bool manual;
+    bool finished = false;
     std::atomic<State> state { State::checking };
     std::atomic<double> progress { 0.0 };
     double shownProgress = 0.0;
@@ -203,7 +211,14 @@ void startUpdateCheck()
     if (started)
         return;
     started = true;
-    updater = std::make_unique<Updater>();
+    updater = std::make_unique<Updater> (false);
+}
+
+void checkForUpdatesNow()
+{
+    if (updater != nullptr && ! updater->isFinished())
+        return;
+    updater = std::make_unique<Updater> (true);
 }
 
 void stopUpdateCheck()
