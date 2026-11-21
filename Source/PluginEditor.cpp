@@ -557,7 +557,7 @@ public:
     {
         setWantsKeyboardFocus (true);
         setTitle (ro ("Claviatură"));
-        setDescription (ro ("Cânți cu tastele Z S X D C pentru octava de jos și Q 2 W 3 E pentru cea de sus. Săgeată sus și jos schimbă octava. Control B sau Escape o închide."));
+        setDescription (ro ("Cânți cu tastele Z S X D C pentru octava de jos și Q 2 W 3 E pentru cea de sus. Săgeată sus și jos te transpun cu câte un semiton, săgeată stânga și dreapta schimbă octava. Control B sau Escape o închide."));
     }
 
     void paint (Graphics& g) override
@@ -565,7 +565,7 @@ public:
         g.fillAll (Colour (0xff2c3340));
         g.setColour (Colours::white);
         g.setFont (FontOptions (16.0f));
-        g.drawText (ro ("Claviatură pornită, octava ") + String (base / 12 - 1), getLocalBounds(), Justification::centred);
+        g.drawText (ro ("Claviatură pornită, octava ") + String (base / 12 - 1) + ro (", transpus ") + String (transpose), getLocalBounds(), Justification::centred);
     }
 
     bool keyPressed (const KeyPress& k) override
@@ -573,11 +573,21 @@ public:
         const auto mods = k.getModifiers();
         if (mods.isCtrlDown() || mods.isAltDown() || mods.isCommandDown())
             return false;
-        if (k.getKeyCode() == KeyPress::upKey || k.getKeyCode() == KeyPress::downKey)
+        const int kc = k.getKeyCode();
+        if (kc == KeyPress::leftKey || kc == KeyPress::rightKey)
         {
             allOff();
-            base = jlimit (12, 96, base + (k.getKeyCode() == KeyPress::upKey ? 12 : -12));
+            base = jlimit (12, 96, base + (kc == KeyPress::rightKey ? 12 : -12));
             speak (ro ("Octava ") + String (base / 12 - 1));
+            repaint();
+            return true;
+        }
+        if (kc == KeyPress::upKey || kc == KeyPress::downKey)
+        {
+            allOff();
+            transpose = jlimit (-12, 12, transpose + (kc == KeyPress::upKey ? 1 : -1));
+            speak (transpose == 0 ? ro ("Netranspus")
+                                  : ro ("Transpus ") + (transpose > 0 ? "+" : "") + String (transpose));
             repaint();
             return true;
         }
@@ -588,7 +598,7 @@ public:
         for (auto& h : held)
             if (h.code == code)
                 return true;   // repetare automata
-        const int note = jlimit (0, 127, base + off);
+        const int note = jlimit (0, 127, base + off + transpose);
         held.add ({ code, note });
         proc.keyboardState.noteOn (1, note, 0.8f);
         return true;
@@ -630,6 +640,7 @@ private:
     ToyProcessor& proc;
     Array<Held> held;
     int base = 48;
+    int transpose = 0;
 };
 
 //==============================================================================
