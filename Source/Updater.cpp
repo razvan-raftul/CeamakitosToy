@@ -1,6 +1,13 @@
 #include "Updater.h"
 #include "PluginProcessor.h"
 #include "Speech.h"
+#include <vector>
+#if JUCE_WINDOWS
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #include <windows.h>
+#endif
 
 using namespace juce;
 
@@ -31,6 +38,37 @@ bool reaperIsOpen()
 }
 
 void say (const String& s) { speak (s); }
+
+// instalarea tacuta porneste dintr-un cmd obisnuit, care asteapta sa se termine si apoi
+// redeschide aplicatia ca program normal (nu din instalarea cu drepturi de administrator)
+bool launchInstallerAndRestart (const File& installer)
+{
+   #if JUCE_WINDOWS
+    auto exe = File::getSpecialLocation (File::currentExecutableFile);
+    auto cmd = File::getSpecialLocation (File::tempDirectory).getChildFile ("Ceamakitos toy actualizare.cmd");
+    String text;
+    text << "@echo off\r\n"
+         << "start \"\" /wait \"" << installer.getFullPathName() << "\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n"
+         << "start \"\" \"" << exe.getFullPathName() << "\"\r\n";
+    if (! cmd.replaceWithText (text, false, false, "\r\n"))
+        return installer.startAsProcess ("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART");
+    String line = "cmd.exe /c \"\"" + cmd.getFullPathName() + "\"\"";
+    STARTUPINFOW si {};
+    si.cb = sizeof (si);
+    PROCESS_INFORMATION pi {};
+    const wchar_t* w = line.toWideCharPointer();
+    std::vector<wchar_t> buf (w, w + wcslen (w) + 1);
+    if (CreateProcessW (nullptr, buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS, nullptr, nullptr, &si, &pi))
+    {
+        CloseHandle (pi.hThread);
+        CloseHandle (pi.hProcess);
+        return true;
+    }
+    return installer.startAsProcess ("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART");
+   #else
+    return installer.startAsProcess ("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART");
+   #endif
+}
 
 class UpdateContent : public Component
 {
@@ -182,7 +220,7 @@ private:
 
         if (s == State::ready)
         {
-            if (target.startAsProcess ("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"))
+            if (launchInstallerAndRestart (target))
             {
                 if (auto* app = JUCEApplicationBase::getInstance())
                     app->systemRequestedQuit();

@@ -46,9 +46,6 @@ Name: "{autodesktop}\Ceamakito's toy"; Filename: "{app}\Ceamakitos toy.exe"
 Name: "{group}\Ceamakito's toy"; Filename: "{app}\Ceamakitos toy.exe"
 Name: "{group}\Citeste-ma"; Filename: "{app}\CITESTE-MA.txt"
 
-[Run]
-Filename: "{app}\Ceamakitos toy.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
-
 [Code]
 function InitializeSetup(): Boolean;
 var

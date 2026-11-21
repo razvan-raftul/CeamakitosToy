@@ -1,4 +1,10 @@
 #include "PluginEditor.h"
+#if JUCE_WINDOWS
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #include <windows.h>
+#endif
 #include "Updater.h"
 #include "Speech.h"
 
@@ -717,7 +723,29 @@ public:
         return TabBarButton::keyPressed (k);
     }
 
-private:
+    // NVDA il citeste ca fila adevarata (tab item, selectat), ca intr-un TabControl din Windows
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override
+    {
+        struct Handler : public AccessibilityHandler
+        {
+            explicit Handler (ToyTabButton& b)
+                : AccessibilityHandler (b, AccessibilityRole::radioButton,
+                                        AccessibilityActions().addAction (AccessibilityActionType::press,
+                                                                          [&b] { b.tabs.setCurrentTabIndex (b.getIndex()); b.tabs.updateTabFocus(); })),
+                  button (b) {}
+            AccessibleState getCurrentState() const override
+            {
+                auto st = AccessibilityHandler::getCurrentState();
+                if (button.isFrontTab())
+                    st = st.withChecked().withSelected();
+                return st;
+            }
+            String getTitle() const override { return button.getButtonText(); }
+            ToyTabButton& button;
+        };
+        return std::make_unique<Handler> (*this);
+    }
+
     ToyTabs& tabs;
 };
 }
@@ -736,7 +764,9 @@ void ToyTabs::updateTabFocus()
         {
             b->setWantsKeyboardFocus (i == cur);
             b->setExplicitFocusOrder (1);
-            b->setTitle (names[i] + ro (", fila ") + String (i + 1) + ro (" din ") + String (n));
+            b->setTitle (names[i]);
+            if (auto* h = b->getAccessibilityHandler())
+                h->notifyAccessibilityEvent (AccessibilityEvent::valueChanged);
         }
 }
 
@@ -758,6 +788,35 @@ void ToyTabs::moveTab (int delta, bool absolute)
 }
 
 //==============================================================================
+// Aplicatia de pe desktop: fereastra vine in fata si primeste tastatura (si dupa actualizare)
+static void bringToFront (Component& c)
+{
+    Process::makeForegroundProcess();
+    auto* top = c.getTopLevelComponent();
+    if (top == nullptr)
+        return;
+    top->toFront (true);
+   #if JUCE_WINDOWS
+    if (auto* peer = top->getPeer())
+    {
+        auto hwnd = (HWND) peer->getNativeHandle();
+        auto fg = GetForegroundWindow();
+        if (hwnd != nullptr && fg != hwnd)
+        {
+            const DWORD fgThread = GetWindowThreadProcessId (fg, nullptr), me = GetCurrentThreadId();
+            if (fgThread != 0 && fgThread != me)
+                AttachThreadInput (me, fgThread, TRUE);
+            ShowWindow (hwnd, SW_RESTORE);
+            BringWindowToTop (hwnd);
+            SetForegroundWindow (hwnd);
+            SetFocus (hwnd);
+            if (fgThread != 0 && fgThread != me)
+                AttachThreadInput (me, fgThread, FALSE);
+        }
+    }
+   #endif
+}
+
 ToyEditor::ToyEditor (ToyProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
@@ -780,11 +839,15 @@ ToyEditor::ToyEditor (ToyProcessor& p)
         startUpdateCheck();
 
     SafePointer<ToyEditor> safe (this);
-    Timer::callAfterDelay (400, [safe]
+    const bool standalone = p.wrapperType == AudioProcessor::wrapperType_Standalone;
+    Timer::callAfterDelay (400, [safe, standalone]
     {
-        if (safe != nullptr && safe->isShowing())
-            if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
-                b->grabKeyboardFocus();
+        if (safe == nullptr || ! safe->isShowing())
+            return;
+        if (standalone)
+            bringToFront (*safe);
+        if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
+            b->grabKeyboardFocus();
     });
 }
 

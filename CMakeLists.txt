@@ -14,6 +14,22 @@ FetchContent_Declare(JUCE
   GIT_SHALLOW ON)
 FetchContent_MakeAvailable(JUCE)
 
+# filele pluginului apar in Windows (UIA) ca file adevarate (TabItem), nu ca butoane radio
+set(_uia_file "${juce_SOURCE_DIR}/modules/juce_gui_basics/native/accessibility/juce_AccessibilityElement_windows.cpp")
+file(READ "${_uia_file}" _uia_src)
+string(FIND "${_uia_src}" "case AccessibilityRole::radioButton:   return UIA_RadioButtonControlTypeId;" _uia_pos)
+if(_uia_pos EQUAL -1)
+  string(FIND "${_uia_src}" "return UIA_TabItemControlTypeId; // Ceamakito" _uia_done)
+  if(_uia_done EQUAL -1)
+    message(FATAL_ERROR "Nu am gasit maparea radioButton in ${_uia_file}")
+  endif()
+else()
+  string(REPLACE "case AccessibilityRole::radioButton:   return UIA_RadioButtonControlTypeId;"
+                 "case AccessibilityRole::radioButton:   return UIA_TabItemControlTypeId; // Ceamakito"
+                 _uia_src "${_uia_src}")
+  file(WRITE "${_uia_file}" "${_uia_src}")
+endif()
+
 juce_add_plugin(CeamakitosToy
   VERSION ${TOY_VERSION}
   COMPANY_NAME "Razvan"
