@@ -46,14 +46,15 @@ Name: "{autodesktop}\Ceamakito's toy"; Filename: "{app}\Ceamakitos toy.exe"
 Name: "{group}\Ceamakito's toy"; Filename: "{app}\Ceamakitos toy.exe"
 Name: "{group}\Citeste-ma"; Filename: "{app}\CITESTE-MA.txt"
 
-[Run]
-Filename: "{app}\Ceamakitos toy.exe"; Description: "Deschide Ceamakito's toy"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\Ceamakitos toy.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
-
 [Code]
 function InitializeSetup(): Boolean;
+var
+  Code: Integer;
 begin
   // la actualizarea singura, aplicatia apuca sa se inchida inainte sa fie inlocuita
   if WizardSilent then Sleep(3000);
+  // daca aplicatia e inca deschisa, o inchid, ca sa poata fi inlocuita
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM "Ceamakitos toy.exe"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Sleep(500);
   Result := True;
 end;

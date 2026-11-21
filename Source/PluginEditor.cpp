@@ -53,6 +53,12 @@ public:
         statusBox.setTitle (ro ("Ce e încărcat"));
         addAndMakeVisible (statusBox);
 
+        versionBox.setReadOnly (true);
+        versionBox.setCaretVisible (true);
+        versionBox.setTitle ("Versiunea");
+        versionBox.setText (ro ("Versiunea ") + JucePlugin_VersionString, dontSendNotification);
+        addAndMakeVisible (versionBox);
+
         setupLabel (volumeLabel, "Volum general (dB)", volumeSlider);
         volumeSlider.setSliderStyle (Slider::LinearHorizontal);
         volumeSlider.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
@@ -73,7 +79,7 @@ public:
 
         int order = 1;
         for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &instrumentBox, &prevButton, &nextButton,
-                                                               &statusBox, &volumeSlider, &sensSlider, &releaseBox })
+                                                               &statusBox, &volumeSlider, &sensSlider, &releaseBox, &versionBox })
             c->setExplicitFocusOrder (order++);
 
         proc.changes.addChangeListener (this);
@@ -103,6 +109,7 @@ public:
         volumeSlider.setBounds (row (26));
         sensSlider.setBounds (row (26));
         releaseBox.setBounds (row (28));
+        versionBox.setBounds (r.removeFromTop (26));
     }
 
     void step (int d) { announceNext = true; proc.stepInstrument (d); }
@@ -161,7 +168,7 @@ private:
 
     ToyProcessor& proc;
     TextButton chooseButton, prevButton, nextButton;
-    TextEditor folderBox, statusBox;
+    TextEditor folderBox, statusBox, versionBox;
     Label instrumentLabel, volumeLabel, sensLabel, releaseLabel;
     Slider volumeSlider, sensSlider;
     ComboBox releaseBox;
