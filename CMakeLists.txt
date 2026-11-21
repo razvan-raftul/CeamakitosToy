@@ -16,7 +16,8 @@ juce_add_plugin(CeamakitosToy
   PLUGIN_MANUFACTURER_CODE Razv
   PLUGIN_CODE Cmkt
   FORMATS VST3
-  PRODUCT_NAME "Ceamakito's toy"
+  PRODUCT_NAME "Ceamakitos toy"
+  PLUGIN_NAME "Ceamakito's toy"
   IS_SYNTH TRUE
   NEEDS_MIDI_INPUT TRUE
   NEEDS_MIDI_OUTPUT FALSE

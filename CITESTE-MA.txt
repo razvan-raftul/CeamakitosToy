@@ -3,7 +3,7 @@ Un instrument virtual VST3, ca Kontakt: un singur plugin cu mai multe instrument
 Merge în REAPER și în orice alt program care încarcă VST3.
 
 Unde se pune
-Folderul "Ceamakito's toy.vst3" merge în C:\Users\Razvan\AppData\Local\Programs\Common\VST3.
+Folderul "Ceamakitos toy.vst3" merge în C:\Users\Razvan\AppData\Local\Programs\Common\VST3.
 REAPER caută deja acolo. În REAPER îl găsești la instrumente, cu numele Ceamakito's toy.
 
 Fereastra pluginului
