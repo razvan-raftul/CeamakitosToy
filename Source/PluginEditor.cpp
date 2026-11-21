@@ -729,15 +729,13 @@ public:
         struct Handler : public AccessibilityHandler
         {
             explicit Handler (ToyTabButton& b)
-                : AccessibilityHandler (b, AccessibilityRole::radioButton,
+                : AccessibilityHandler (b, AccessibilityRole::button,
                                         AccessibilityActions().addAction (AccessibilityActionType::press,
                                                                           [&b] { b.tabs.setCurrentTabIndex (b.getIndex()); b.tabs.updateTabFocus(); })),
                   button (b) {}
             AccessibleState getCurrentState() const override
             {
                 auto st = AccessibilityHandler::getCurrentState();
-                if (button.isFrontTab())
-                    st = st.withChecked().withSelected();
                 return st;
             }
             String getTitle() const override { return button.getButtonText(); }
