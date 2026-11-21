@@ -70,6 +70,19 @@ public:
 
     juce::ChangeBroadcaster changes;
 
+    // pentru fereastra de construit instrumente
+    struct MapLine { int lo = 36, hi = 36, root = 36, vlo = 0, vhi = 127, grp = 0; juce::String file; };
+    static std::vector<MapLine> readMap (const juce::File& dir);
+    static bool writeMap (const juce::File& dir, const std::vector<MapLine>& lines);
+    static juce::String noteName (int note);
+    juce::File instrumentFolder (int index) const;
+    void reloadCurrent() { requestLoad(); }
+    void rescanFolders() { rescan(); }
+
+    juce::MidiKeyboardState keyboardState;
+    std::atomic<int> lastNote { -1 };
+    std::atomic<int> noteCount { 0 };
+
 private:
     // datele de aici trebuie sa existe inainte de apvts (le foloseste textul parametrului Instrument)
     mutable juce::CriticalSection listLock;

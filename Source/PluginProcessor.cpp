@@ -109,6 +109,10 @@ File ToyProcessor::globalFile()
 
 File ToyProcessor::defaultRoot()
 {
+    auto docs = File::getSpecialLocation (File::userDocumentsDirectory)
+                    .getChildFile ("Ceamakito's toy").getChildFile ("Instrumente");
+    if (docs.isDirectory())
+        return docs;
     return File::getSpecialLocation (File::userApplicationDataDirectory)
                .getChildFile ("REAPER").getChildFile ("Data")
                .getChildFile ("Ceamakito's toy").getChildFile ("Instrumente");
@@ -336,14 +340,22 @@ void ToyProcessor::run()
     }
 }
 
-std::shared_ptr<Instrument> ToyProcessor::build (const File& dir)
+juce::String ToyProcessor::noteName (int note)
 {
-    auto inst = std::make_shared<Instrument>();
-    inst->name = dir.getFileName();
+    static const char* names[] = { "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si" };
+    note = jlimit (0, 127, note);
+    return String (names[note % 12]) + String (note / 12 - 1) + " (" + String (note) + ")";
+}
 
-    struct Line { int lo, hi, root, vlo, vhi, grp; String file; };
-    std::vector<Line> lines;
+juce::File ToyProcessor::instrumentFolder (int index) const
+{
+    const ScopedLock sl (listLock);
+    return isPositiveAndBelow (index, folders.size()) ? folders[index] : File();
+}
 
+std::vector<ToyProcessor::MapLine> ToyProcessor::readMap (const File& dir)
+{
+    std::vector<MapLine> lines;
     auto map = dir.getChildFile ("harta.txt");
     if (map.existsAsFile())
     {
@@ -362,7 +374,7 @@ std::shared_ptr<Instrument> ToyProcessor::build (const File& dir)
             if (nums.isEmpty())
                 continue;
 
-            Line l;
+            MapLine l;
             l.lo   = nums[0].getIntValue();
             l.hi   = nums.size() > 1 ? nums[1].getIntValue() : l.lo;
             l.root = nums.size() > 2 ? nums[2].getIntValue() : l.lo;
@@ -384,10 +396,29 @@ std::shared_ptr<Instrument> ToyProcessor::build (const File& dir)
         {
             if (note > 127)
                 break;
-            lines.push_back ({ note, note, note, 0, 127, 0, f.getFileName() });
-            ++note;
+            MapLine l;
+            l.lo = l.hi = l.root = note++;
+            l.file = f.getFileName();
+            lines.push_back (l);
         }
     }
+    return lines;
+}
+
+bool ToyProcessor::writeMap (const File& dir, const std::vector<MapLine>& lines)
+{
+    String t;
+    t << "# Ceamakito's toy: clapa de jos, clapa de sus, clapa pe care suna neschimbat, cat de tare minim, cat de tare maxim, grupa | fisier\n";
+    for (auto& l : lines)
+        t << l.lo << " " << l.hi << " " << l.root << " " << l.vlo << " " << l.vhi << " " << l.grp << " | " << l.file << "\n";
+    return dir.getChildFile ("harta.txt").replaceWithText (t);
+}
+
+std::shared_ptr<Instrument> ToyProcessor::build (const File& dir)
+{
+    auto inst = std::make_shared<Instrument>();
+    inst->name = dir.getFileName();
+    const auto lines = readMap (dir);
 
     for (auto& l : lines)
     {
@@ -544,6 +575,7 @@ void ToyProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi)
     ScopedNoDenormals noDenormals;
     buffer.clear();
     const int n = buffer.getNumSamples();
+    keyboardState.processNextMidiBuffer (midi, 0, n, true);
 
     {
         const SpinLock::ScopedTryLockType tl (instLock);
@@ -564,7 +596,11 @@ void ToyProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi)
         pos = t;
 
         if (msg.isNoteOn())
+        {
             noteOn (msg.getNoteNumber(), msg.getVelocity());
+            lastNote = msg.getNoteNumber();
+            ++noteCount;
+        }
         else if (msg.isNoteOff())
             noteOff (msg.getNoteNumber());
         else if (msg.isAllNotesOff() || msg.isAllSoundOff())

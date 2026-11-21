@@ -1,23 +1,30 @@
 Ceamakito's toy
 Un instrument virtual VST3, ca Kontakt: un singur plugin cu mai multe instrumente făcute din WAV-uri.
-Merge în REAPER și în orice alt program care încarcă VST3.
+Merge în REAPER și în orice alt program care încarcă VST3. Are și o aplicație separată, cu iconiță pe desktop.
 
-Unde se pune
-Folderul "Ceamakitos toy.vst3" merge în C:\Users\Razvan\AppData\Local\Programs\Common\VST3.
-REAPER caută deja acolo. În REAPER îl găsești la instrumente, cu numele Ceamakito's toy.
+Ce face instalarea
+Pune pluginul în C:\Program Files\Common Files\VST3, folderul unde îl caută toate programele de muzică.
+Pune aplicația Ceamakito's toy pe desktop.
+Pune scripturile pentru REAPER, cu Alt 1, Alt 2 și Alt 3.
+Pune instrumentele de test în Documente\Ceamakito's toy\Instrumente.
+Când deschizi după aceea un program de muzică, el găsește singur pluginul nou. În REAPER apare ca VST3i: Ceamakito's toy (Razvan).
 
-Fereastra pluginului
-Se umblă cu Tab. Ai pe rând: butonul Alege folderul cu instrumente, căsuța cu folderul ales, lista Instrument, butoanele Instrumentul anterior și Instrumentul următor, căsuța care spune ce e încărcat, volumul general, cât contează cât de tare apeși clapa și ce se întâmplă la ridicarea clapei.
-În fereastră merg și Alt 1, Alt 2 și Alt 3.
+Fereastra are două file
+Fila Cântă: alegi folderul cu instrumente, alegi instrumentul, schimbi volumul și cât contează cât de tare apeși clapa. Jos e o claviatură: când ajungi pe ea cu Tab, cânți cu tastele A, W, S, E, D, F și așa mai departe.
+Fila Construiește instrumente: scrii numele instrumentului nou și apeși Creează instrumentul. Apoi apeși Adaugă sunete și alegi WAV-urile. Fiecare sunet se pune pe clapa următoare.
+În lista cu sunete alegi un sunet și apoi poți să-l asculți, să-l pui pe clapa pe care o apeși pe claviatură sau să-l scoți din instrument.
+Sub listă schimbi pentru sunetul ales clapa de jos, clapa de sus, clapa pe care sună neschimbat, grupa și cât de tare trebuie apăsat.
+Tot ce schimbi se salvează singur.
 
-Scurtături în REAPER, și în claviatura de la Control B
+Scurtături
 Alt 1: instrumentul anterior.
 Alt 2: instrumentul următor.
-Alt 3: alegi folderul cu instrumente, apoi instrumentul din listă.
+Alt 3: alegi folderul cu instrumente.
+În REAPER merg și în claviatura de la Control B.
 
 Cum arată un instrument
 Un instrument e un folder cu WAV-uri. Numele folderului e numele instrumentului.
-Dacă folderul are fișierul harta.txt, el spune pe ce clapă merge fiecare WAV. Fiecare rând arată așa:
+Fișierul harta.txt din folder spune pe ce clapă merge fiecare WAV. Fiecare rând arată așa:
 36 36 36 0 127 0 | kick.wav
 Numerele sunt: clapa de jos, clapa de sus, clapa pe care sună WAV-ul neschimbat, cât de tare minim, cât de tare maxim, grupa.
 Sunetele din aceeași grupă se taie unul pe altul, ca hi-hat-ul închis și cel deschis. Grupa 0 înseamnă fără grupă.

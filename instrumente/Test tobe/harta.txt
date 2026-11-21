@@ -1,0 +1,6 @@
+# Test tobe: un instrument de proba, cu sunete generate pe calculator
+# NOTA_DE_LA NOTA_PANA RADACINA VITEZA_MIN VITEZA_MAX GRUPA | fisier.wav   (60 = Do central)
+36 36 36 0 127 0 | kick.wav
+38 38 38 0 127 0 | toba mica.wav
+42 42 42 0 127 1 | hi-hat inchis.wav
+46 46 46 0 127 1 | hi-hat deschis.wav

@@ -1,0 +1,2 @@
+# Test pian: un singur sunet (Do 60) intins pe toata claviatura
+21 108 60 0 127 0 | do4.wav

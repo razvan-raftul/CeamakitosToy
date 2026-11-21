@@ -26,26 +26,20 @@ jobs:
             exit 1
           }
 
-      - name: Package
+      - name: Installer
         shell: pwsh
+        env:
+          VER: 0.1.${{ github.run_number }}
         run: |
-          $out = "pachet/Ceamakito's toy"
-          New-Item -ItemType Directory -Force -Path "$out/VST3" | Out-Null
-          Copy-Item -Recurse "build/CeamakitosToy_artefacts/Release/VST3/*" "$out/VST3/"
-          New-Item -ItemType Directory -Force -Path "$out/REAPER" | Out-Null
-          Copy-Item -Recurse "reaper/*" "$out/REAPER/"
-          Copy-Item "CITESTE-MA.txt" "$out/"
-          Compress-Archive -Path "pachet/*" -DestinationPath "CeamakitosToy.zip" -Force
-          Get-ChildItem -Recurse pachet | Select-Object FullName
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: CeamakitosToy
-          path: CeamakitosToy.zip
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error::Inno Setup a esuat"; exit 1 }
+          Get-ChildItem out
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
           name: Ceamakito's toy 0.1.${{ github.run_number }}
-          files: CeamakitosToy.zip
+          files: out/*.exe

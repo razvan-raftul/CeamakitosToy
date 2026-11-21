@@ -2,99 +2,576 @@
 
 using namespace juce;
 
+static void announce (const String& s)
+{
+    AccessibilityHandler::postAnnouncement (s, AccessibilityHandler::AnnouncementPriority::high);
+}
+
+static void setupLabel (Label& l, const String& text, Component& target)
+{
+    l.setText (text, dontSendNotification);
+    l.attachToComponent (&target, true);
+    target.setTitle (text);
+}
+
+//==============================================================================
+// Fila "Cântă"
+class PlayPanel : public Component, private ChangeListener
+{
+public:
+    explicit PlayPanel (ToyProcessor& p)
+        : proc (p), keyboard (p.keyboardState, MidiKeyboardComponent::horizontalKeyboard)
+    {
+        chooseButton.setButtonText (ro ("Alege folderul cu instrumente (Alt 3)"));
+        chooseButton.onClick = [this] { chooseFolder(); };
+        addAndMakeVisible (chooseButton);
+
+        folderBox.setReadOnly (true);
+        folderBox.setCaretVisible (true);
+        folderBox.setTitle (ro ("Folderul cu instrumente"));
+        addAndMakeVisible (folderBox);
+
+        setupLabel (instrumentLabel, "Instrument", instrumentBox);
+        instrumentBox.onChange = [this]
+        {
+            const int i = instrumentBox.getSelectedItemIndex();
+            if (i >= 0 && i != proc.getCurrentIndex())
+                proc.selectInstrument (i);
+        };
+        addAndMakeVisible (instrumentBox);
+
+        prevButton.setButtonText (ro ("Instrumentul anterior (Alt 1)"));
+        prevButton.onClick = [this] { step (-1); };
+        addAndMakeVisible (prevButton);
+
+        nextButton.setButtonText (ro ("Instrumentul următor (Alt 2)"));
+        nextButton.onClick = [this] { step (1); };
+        addAndMakeVisible (nextButton);
+
+        statusBox.setReadOnly (true);
+        statusBox.setCaretVisible (true);
+        statusBox.setTitle (ro ("Ce e încărcat"));
+        addAndMakeVisible (statusBox);
+
+        setupLabel (volumeLabel, "Volum general (dB)", volumeSlider);
+        volumeSlider.setSliderStyle (Slider::LinearHorizontal);
+        volumeSlider.setTextBoxStyle (Slider::TextBoxRight, false, 70, 24);
+        addAndMakeVisible (volumeSlider);
+        volumeAtt = std::make_unique<SA> (proc.apvts, "volum", volumeSlider);
+
+        setupLabel (sensLabel, ro ("Cât contează cât de tare apeși clapa"), sensSlider);
+        sensSlider.setSliderStyle (Slider::LinearHorizontal);
+        sensSlider.setTextBoxStyle (Slider::TextBoxRight, false, 70, 24);
+        addAndMakeVisible (sensSlider);
+        sensAtt = std::make_unique<SA> (proc.apvts, "sensibilitate", sensSlider);
+
+        setupLabel (releaseLabel, "La ridicarea clapei", releaseBox);
+        releaseBox.addItemList ({ ro ("Sunetul continuă până la capăt"), ro ("Sunetul se oprește") }, 1);
+        addAndMakeVisible (releaseBox);
+        releaseAtt = std::make_unique<CA> (proc.apvts, "ridicare", releaseBox);
+
+        keyboard.setTitle (ro ("Claviatură. Cânți cu tastele A, W, S, E, D, F și așa mai departe"));
+        keyboard.setWantsKeyboardFocus (true);
+        addAndMakeVisible (keyboard);
+
+        int order = 1;
+        for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &instrumentBox, &prevButton, &nextButton,
+                                                               &statusBox, &volumeSlider, &sensSlider, &releaseBox, &keyboard })
+            c->setExplicitFocusOrder (order++);
+
+        proc.changes.addChangeListener (this);
+        refresh();
+    }
+
+    ~PlayPanel() override { proc.changes.removeChangeListener (this); }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced (12);
+        chooseButton.setBounds (r.removeFromTop (30));
+        r.removeFromTop (6);
+        folderBox.setBounds (r.removeFromTop (26));
+        r.removeFromTop (10);
+
+        const int labelW = 250;
+        auto row = [&r, labelW] (int h) { auto x = r.removeFromTop (h); r.removeFromTop (8); return x.withTrimmedLeft (labelW); };
+
+        instrumentBox.setBounds (row (28));
+        auto buttons = r.removeFromTop (30);
+        r.removeFromTop (8);
+        prevButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2, 0));
+        nextButton.setBounds (buttons.reduced (2, 0));
+        statusBox.setBounds (r.removeFromTop (26));
+        r.removeFromTop (10);
+        volumeSlider.setBounds (row (26));
+        sensSlider.setBounds (row (26));
+        releaseBox.setBounds (row (28));
+        keyboard.setBounds (r.removeFromTop (90));
+    }
+
+    void step (int d) { announceNext = true; proc.stepInstrument (d); }
+
+    void chooseFolder()
+    {
+        chooser = std::make_unique<FileChooser> (ro ("Alege folderul cu instrumente"), proc.getRoot());
+        SafePointer<PlayPanel> safe (this);
+        chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectDirectories,
+                              [safe] (const FileChooser& fc)
+                              {
+                                  if (safe == nullptr)
+                                      return;
+                                  auto f = fc.getResult();
+                                  if (f.isDirectory())
+                                  {
+                                      safe->announceNext = true;
+                                      safe->proc.setRoot (f);
+                                  }
+                                  safe->instrumentBox.grabKeyboardFocus();
+                              });
+    }
+
+    ComboBox instrumentBox;
+
+private:
+    void changeListenerCallback (ChangeBroadcaster*) override { refresh(); }
+
+    void refresh()
+    {
+        const auto names = proc.getInstrumentNames();
+        if (names != shownNames)
+        {
+            shownNames = names;
+            instrumentBox.clear (dontSendNotification);
+            instrumentBox.addItemList (names, 1);
+        }
+        instrumentBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
+        folderBox.setText (proc.getRoot().getFullPathName(), dontSendNotification);
+
+        const auto st = proc.getStatus();
+        if (st != lastStatus)
+        {
+            lastStatus = st;
+            statusBox.setText (st, dontSendNotification);
+            if (announceNext)
+            {
+                announceNext = false;
+                announce (st);
+            }
+        }
+    }
+
+    ToyProcessor& proc;
+    TextButton chooseButton, prevButton, nextButton;
+    TextEditor folderBox, statusBox;
+    Label instrumentLabel, volumeLabel, sensLabel, releaseLabel;
+    Slider volumeSlider, sensSlider;
+    ComboBox releaseBox;
+    MidiKeyboardComponent keyboard;
+
+    using SA = AudioProcessorValueTreeState::SliderAttachment;
+    using CA = AudioProcessorValueTreeState::ComboBoxAttachment;
+    std::unique_ptr<SA> volumeAtt, sensAtt;
+    std::unique_ptr<CA> releaseAtt;
+
+    std::unique_ptr<FileChooser> chooser;
+    StringArray shownNames;
+    String lastStatus;
+    bool announceNext = false;
+};
+
+//==============================================================================
+// Fila "Construiește instrumente"
+class BuildPanel : public Component, private ChangeListener, private ListBoxModel, private Timer
+{
+public:
+    explicit BuildPanel (ToyProcessor& p) : proc (p)
+    {
+        setupLabel (newLabel, "Numele instrumentului nou", newName);
+        addAndMakeVisible (newName);
+        newName.onReturnKey = [this] { createInstrument(); };
+        createButton.setButtonText (ro ("Creează instrumentul"));
+        createButton.onClick = [this] { createInstrument(); };
+        addAndMakeVisible (createButton);
+
+        setupLabel (instLabel, ro ("Instrumentul pe care îl construiești"), instBox);
+        instBox.onChange = [this]
+        {
+            const int i = instBox.getSelectedItemIndex();
+            if (i >= 0 && i != proc.getCurrentIndex())
+                proc.selectInstrument (i);
+            loadEntries();
+        };
+        addAndMakeVisible (instBox);
+
+        addButton.setButtonText (ro ("Adaugă sunete (WAV)"));
+        addButton.onClick = [this] { addSounds(); };
+        addAndMakeVisible (addButton);
+
+        list.setModel (this);
+        list.setTitle ("Sunetele instrumentului");
+        list.setRowHeight (24);
+        addAndMakeVisible (list);
+
+        listenButton.setButtonText (ro ("Ascultă sunetul"));
+        listenButton.onClick = [this] { listen(); };
+        addAndMakeVisible (listenButton);
+
+        learnButton.setButtonText (ro ("Pune sunetul pe clapa pe care o apeși"));
+        learnButton.onClick = [this] { startLearning(); };
+        addAndMakeVisible (learnButton);
+
+        removeButton.setButtonText (ro ("Scoate sunetul din instrument"));
+        removeButton.onClick = [this] { removeSound(); };
+        addAndMakeVisible (removeButton);
+
+        StringArray notes;
+        for (int i = 0; i < 128; ++i)
+            notes.add (ToyProcessor::noteName (i));
+        StringArray levels;
+        for (int i = 0; i < 128; ++i)
+            levels.add (String (i));
+        StringArray groups { ro ("Fără grupă") };
+        for (int i = 1; i <= 16; ++i)
+            groups.add ("Grupa " + String (i));
+
+        setupCombo (loBox, loLabel, "Clapa de jos", notes);
+        setupCombo (hiBox, hiLabel, "Clapa de sus", notes);
+        setupCombo (rootBox, rootLabel, ro ("Clapa pe care sună neschimbat"), notes);
+        setupCombo (grpBox, grpLabel, ro ("Grupa (se taie între ele)"), groups);
+        setupCombo (vloBox, vloLabel, ro ("Cel mai încet la care sună"), levels);
+        setupCombo (vhiBox, vhiLabel, ro ("Cel mai tare la care sună"), levels);
+
+        int order = 1;
+        for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &list, &listenButton,
+                                                               &learnButton, &removeButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
+            c->setExplicitFocusOrder (order++);
+
+        proc.changes.addChangeListener (this);
+        refreshNames();
+        loadEntries();
+    }
+
+    ~BuildPanel() override { proc.changes.removeChangeListener (this); }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced (12);
+        const int labelW = 250;
+        auto row = [&r, labelW] (int h) { auto x = r.removeFromTop (h); r.removeFromTop (6); return x.withTrimmedLeft (labelW); };
+
+        auto top = row (26);
+        createButton.setBounds (top.removeFromRight (180));
+        newName.setBounds (top.withTrimmedRight (6));
+        instBox.setBounds (row (26));
+        addButton.setBounds (r.removeFromTop (28));
+        r.removeFromTop (6);
+        list.setBounds (r.removeFromTop (130));
+        r.removeFromTop (6);
+        auto b = r.removeFromTop (28);
+        r.removeFromTop (6);
+        const int w = b.getWidth() / 3;
+        listenButton.setBounds (b.removeFromLeft (w).reduced (2, 0));
+        learnButton.setBounds (b.removeFromLeft (w).reduced (2, 0));
+        removeButton.setBounds (b.reduced (2, 0));
+        for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
+            c->setBounds (row (24));
+    }
+
+private:
+    void setupCombo (ComboBox& box, Label& label, const String& text, const StringArray& items)
+    {
+        setupLabel (label, text, box);
+        box.addItemList (items, 1);
+        box.onChange = [this] { fieldsChanged(); };
+        addAndMakeVisible (box);
+    }
+
+    // --- lista de sunete
+    int getNumRows() override { return (int) entries.size(); }
+
+    String getNameForRow (int row) override
+    {
+        if (! isPositiveAndBelow (row, (int) entries.size()))
+            return {};
+        const auto& e = entries[(size_t) row];
+        String s = e.file + ", ";
+        if (e.lo == e.hi)
+            s << ToyProcessor::noteName (e.lo);
+        else
+            s << ro ("de la ") << ToyProcessor::noteName (e.lo) << ro (" până la ") << ToyProcessor::noteName (e.hi)
+              << ro (", sună neschimbat pe ") << ToyProcessor::noteName (e.root);
+        if (e.grp > 0)
+            s << ", grupa " << e.grp;
+        if (e.vlo > 0 || e.vhi < 127)
+            s << ro (", când apeși între ") << e.vlo << " și " << e.vhi;
+        return s;
+    }
+
+    void paintListBoxItem (int row, Graphics& g, int w, int h, bool selected) override
+    {
+        if (selected)
+            g.fillAll (Colour (0xff3a5a8a));
+        g.setColour (Colours::white);
+        g.setFont (FontOptions (15.0f));
+        g.drawText (getNameForRow (row), 6, 0, w - 12, h, Justification::centredLeft, true);
+    }
+
+    void selectedRowsChanged (int) override { showFields(); }
+
+    // --- date
+    File currentDir() const { return proc.instrumentFolder (proc.getCurrentIndex()); }
+
+    void refreshNames()
+    {
+        const auto names = proc.getInstrumentNames();
+        if (names != shownNames)
+        {
+            shownNames = names;
+            instBox.clear (dontSendNotification);
+            instBox.addItemList (names, 1);
+        }
+        instBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
+    }
+
+    void changeListenerCallback (ChangeBroadcaster*) override
+    {
+        refreshNames();
+        if (currentDir() != shownDir)
+            loadEntries();
+    }
+
+    void loadEntries()
+    {
+        shownDir = currentDir();
+        entries = shownDir == File() ? std::vector<ToyProcessor::MapLine>() : ToyProcessor::readMap (shownDir);
+        list.updateContent();
+        list.repaint();
+        if (! entries.empty() && list.getSelectedRow() < 0)
+            list.selectRow (0);
+        showFields();
+    }
+
+    void save (int selectRow)
+    {
+        if (shownDir == File())
+            return;
+        ToyProcessor::writeMap (shownDir, entries);
+        list.updateContent();
+        list.repaint();
+        if (isPositiveAndBelow (selectRow, (int) entries.size()))
+            list.selectRow (selectRow);
+        proc.reloadCurrent();
+    }
+
+    void showFields()
+    {
+        const int r = list.getSelectedRow();
+        const bool ok = isPositiveAndBelow (r, (int) entries.size());
+        for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
+            c->setEnabled (ok);
+        listenButton.setEnabled (ok);
+        learnButton.setEnabled (ok);
+        removeButton.setEnabled (ok);
+        if (! ok)
+            return;
+        const auto& e = entries[(size_t) r];
+        loBox.setSelectedItemIndex (e.lo, dontSendNotification);
+        hiBox.setSelectedItemIndex (e.hi, dontSendNotification);
+        rootBox.setSelectedItemIndex (e.root, dontSendNotification);
+        grpBox.setSelectedItemIndex (jlimit (0, 16, e.grp), dontSendNotification);
+        vloBox.setSelectedItemIndex (e.vlo, dontSendNotification);
+        vhiBox.setSelectedItemIndex (e.vhi, dontSendNotification);
+    }
+
+    void fieldsChanged()
+    {
+        const int r = list.getSelectedRow();
+        if (! isPositiveAndBelow (r, (int) entries.size()))
+            return;
+        auto& e = entries[(size_t) r];
+        e.lo   = jmax (0, loBox.getSelectedItemIndex());
+        e.hi   = jmax (e.lo, hiBox.getSelectedItemIndex());
+        e.root = jmax (0, rootBox.getSelectedItemIndex());
+        e.grp  = jmax (0, grpBox.getSelectedItemIndex());
+        e.vlo  = jmax (0, vloBox.getSelectedItemIndex());
+        e.vhi  = jmax (e.vlo, vhiBox.getSelectedItemIndex());
+        save (r);
+        showFields();
+    }
+
+    // --- actiuni
+    void createInstrument()
+    {
+        auto name = File::createLegalFileName (newName.getText().trim());
+        if (name.isEmpty())
+        {
+            announce (ro ("Scrie întâi numele instrumentului."));
+            newName.grabKeyboardFocus();
+            return;
+        }
+        auto root = proc.getRoot();
+        if (root == File())
+        {
+            root = File::getSpecialLocation (File::userDocumentsDirectory).getChildFile ("Ceamakito's toy").getChildFile ("Instrumente");
+            root.createDirectory();
+            proc.setRoot (root);
+        }
+        auto dir = root.getChildFile (name);
+        if (dir.isDirectory())
+        {
+            announce (ro ("Există deja un instrument cu numele ") + name);
+            return;
+        }
+        dir.createDirectory();
+        ToyProcessor::writeMap (dir, {});
+        proc.rescanFolders();
+        const int idx = proc.getInstrumentNames().indexOf (name);
+        if (idx >= 0)
+            proc.selectInstrument (idx);
+        newName.clear();
+        loadEntries();
+        refreshNames();
+        announce (ro ("Am creat instrumentul ") + name + ro (". Acum adaugă sunete."));
+        addButton.grabKeyboardFocus();
+    }
+
+    void addSounds()
+    {
+        if (shownDir == File())
+        {
+            announce (ro ("Alege sau creează întâi un instrument."));
+            return;
+        }
+        chooser = std::make_unique<FileChooser> (ro ("Alege sunetele"), File(), "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+        SafePointer<BuildPanel> safe (this);
+        chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles | FileBrowserComponent::canSelectMultipleItems,
+                              [safe] (const FileChooser& fc)
+                              {
+                                  if (safe != nullptr)
+                                      safe->addFiles (fc.getResults());
+                              });
+    }
+
+    void addFiles (const Array<File>& files)
+    {
+        if (files.isEmpty())
+            return;
+        int next = 36;
+        for (auto& e : entries)
+            next = jmax (next, e.hi + 1);
+
+        int added = 0;
+        for (auto f : files)
+        {
+            if (! f.existsAsFile())
+                continue;
+            auto dest = shownDir.getChildFile (f.getFileName());
+            if (f.getParentDirectory() != shownDir)
+            {
+                if (dest.existsAsFile())
+                    dest = shownDir.getNonexistentChildFile (f.getFileNameWithoutExtension(), f.getFileExtension(), false);
+                if (! f.copyFileTo (dest))
+                    continue;
+            }
+            ToyProcessor::MapLine l;
+            l.lo = l.hi = l.root = jmin (127, next++);
+            l.file = dest.getFileName();
+            entries.push_back (l);
+            ++added;
+        }
+        save ((int) entries.size() - 1);
+        announce (ro ("Am adăugat ") + String (added) + (added == 1 ? ro (" sunet") : ro (" sunete"))
+                  + ro (". Fiecare e pe clapa următoare, le poți muta din listă."));
+        list.grabKeyboardFocus();
+    }
+
+    void listen()
+    {
+        const int r = list.getSelectedRow();
+        if (! isPositiveAndBelow (r, (int) entries.size()))
+            return;
+        const auto& e = entries[(size_t) r];
+        const int note = (e.root >= e.lo && e.root <= e.hi) ? e.root : e.lo;
+        proc.keyboardState.noteOn (1, note, 0.8f);
+        auto& ks = proc.keyboardState;
+        Timer::callAfterDelay (1500, [&ks, note] { ks.noteOff (1, note, 0.0f); });
+    }
+
+    void startLearning()
+    {
+        if (! isPositiveAndBelow (list.getSelectedRow(), (int) entries.size()))
+            return;
+        learningRow = list.getSelectedRow();
+        learnCount = proc.noteCount.load();
+        announce (ro ("Apasă clapa pe care vrei sunetul."));
+        startTimer (40);
+    }
+
+    void timerCallback() override
+    {
+        if (proc.noteCount.load() == learnCount)
+            return;
+        stopTimer();
+        const int note = proc.lastNote.load();
+        if (! isPositiveAndBelow (learningRow, (int) entries.size()) || note < 0)
+            return;
+        auto& e = entries[(size_t) learningRow];
+        e.lo = e.hi = e.root = note;
+        save (learningRow);
+        showFields();
+        announce (e.file + ro (" e pe ") + ToyProcessor::noteName (note));
+    }
+
+    void removeSound()
+    {
+        const int r = list.getSelectedRow();
+        if (! isPositiveAndBelow (r, (int) entries.size()))
+            return;
+        const auto name = entries[(size_t) r].file;
+        entries.erase (entries.begin() + r);
+        save (jmin (r, (int) entries.size() - 1));
+        showFields();
+        announce (ro ("Am scos ") + name + ro (" din instrument. Fișierul a rămas în folder."));
+    }
+
+    ToyProcessor& proc;
+    Label newLabel, instLabel, loLabel, hiLabel, rootLabel, grpLabel, vloLabel, vhiLabel;
+    TextEditor newName;
+    TextButton createButton, addButton, listenButton, learnButton, removeButton;
+    ComboBox instBox, loBox, hiBox, rootBox, grpBox, vloBox, vhiBox;
+    ListBox list;
+
+    std::vector<ToyProcessor::MapLine> entries;
+    File shownDir;
+    StringArray shownNames;
+    std::unique_ptr<FileChooser> chooser;
+    int learningRow = -1, learnCount = 0;
+};
+
+//==============================================================================
 ToyEditor::ToyEditor (ToyProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
-    title.setText ("Ceamakito's toy", dontSendNotification);
-    title.setFont (FontOptions (22.0f, Font::bold));
-    title.setJustificationType (Justification::centred);
-    addAndMakeVisible (title);
-
-    chooseButton.setButtonText (ro ("Alege folderul cu instrumente (Alt 3)"));
-    chooseButton.onClick = [this] { chooseFolder(); };
-    addAndMakeVisible (chooseButton);
-
-    folderBox.setReadOnly (true);
-    folderBox.setCaretVisible (true);
-    folderBox.setTitle (ro ("Folderul cu instrumente"));
-    addAndMakeVisible (folderBox);
-
-    instrumentLabel.setText ("Instrument", dontSendNotification);
-    instrumentLabel.attachToComponent (&instrumentBox, true);
-    instrumentBox.setTitle ("Instrument");
-    instrumentBox.onChange = [this]
-    {
-        const int i = instrumentBox.getSelectedItemIndex();
-        if (i >= 0 && i != proc.getCurrentIndex())
-            proc.selectInstrument (i);
-    };
-    addAndMakeVisible (instrumentBox);
-
-    prevButton.setButtonText (ro ("Instrumentul anterior (Alt 1)"));
-    prevButton.onClick = [this] { announceNext = true; proc.stepInstrument (-1); };
-    addAndMakeVisible (prevButton);
-
-    nextButton.setButtonText (ro ("Instrumentul următor (Alt 2)"));
-    nextButton.onClick = [this] { announceNext = true; proc.stepInstrument (1); };
-    addAndMakeVisible (nextButton);
-
-    statusBox.setReadOnly (true);
-    statusBox.setCaretVisible (true);
-    statusBox.setTitle (ro ("Ce e încărcat"));
-    addAndMakeVisible (statusBox);
-
-    volumeLabel.setText ("Volum general (dB)", dontSendNotification);
-    volumeLabel.attachToComponent (&volumeSlider, true);
-    volumeSlider.setTitle ("Volum general");
-    volumeSlider.setSliderStyle (Slider::LinearHorizontal);
-    volumeSlider.setTextBoxStyle (Slider::TextBoxRight, false, 70, 24);
-    addAndMakeVisible (volumeSlider);
-    volumeAtt = std::make_unique<SA> (proc.apvts, "volum", volumeSlider);
-
-    sensLabel.setText (ro ("Cât contează cât de tare apeși"), dontSendNotification);
-    sensLabel.attachToComponent (&sensSlider, true);
-    sensSlider.setTitle (ro ("Cât contează cât de tare apeși clapa"));
-    sensSlider.setSliderStyle (Slider::LinearHorizontal);
-    sensSlider.setTextBoxStyle (Slider::TextBoxRight, false, 70, 24);
-    addAndMakeVisible (sensSlider);
-    sensAtt = std::make_unique<SA> (proc.apvts, "sensibilitate", sensSlider);
-
-    releaseLabel.setText ("La ridicarea clapei", dontSendNotification);
-    releaseLabel.attachToComponent (&releaseBox, true);
-    releaseBox.setTitle ("La ridicarea clapei");
-    releaseBox.addItemList ({ ro ("Sunetul continuă până la capăt"), ro ("Sunetul se oprește") }, 1);
-    addAndMakeVisible (releaseBox);
-    releaseAtt = std::make_unique<CA> (proc.apvts, "ridicare", releaseBox);
-
-    chooseButton.setExplicitFocusOrder (1);
-    folderBox.setExplicitFocusOrder (2);
-    instrumentBox.setExplicitFocusOrder (3);
-    prevButton.setExplicitFocusOrder (4);
-    nextButton.setExplicitFocusOrder (5);
-    statusBox.setExplicitFocusOrder (6);
-    volumeSlider.setExplicitFocusOrder (7);
-    sensSlider.setExplicitFocusOrder (8);
-    releaseBox.setExplicitFocusOrder (9);
+    play = new PlayPanel (p);
+    build = new BuildPanel (p);
+    const auto bg = Colour (0xff20242c);
+    tabs.addTab (ro ("Cântă"), bg, play, true);
+    tabs.addTab (ro ("Construiește instrumente"), bg, build, true);
+    tabs.setTitle ("Ceamakito's toy");
+    addAndMakeVisible (tabs);
 
     setTitle ("Ceamakito's toy");
-    setWantsKeyboardFocus (false);
-    setSize (560, 360);
-
-    proc.changes.addChangeListener (this);
-    refresh();
+    setSize (700, 600);
 
     SafePointer<ToyEditor> safe (this);
     Timer::callAfterDelay (400, [safe]
     {
-        if (safe != nullptr && safe->isShowing())
-            safe->instrumentBox.grabKeyboardFocus();
+        if (safe != nullptr && safe->isShowing() && safe->play != nullptr)
+            safe->play->instrumentBox.grabKeyboardFocus();
     });
 }
 
-ToyEditor::~ToyEditor()
-{
-    proc.changes.removeChangeListener (this);
-}
+ToyEditor::~ToyEditor() = default;
 
 void ToyEditor::paint (Graphics& g)
 {
@@ -103,88 +580,17 @@ void ToyEditor::paint (Graphics& g)
 
 void ToyEditor::resized()
 {
-    auto r = getLocalBounds().reduced (12);
-    title.setBounds (r.removeFromTop (34));
-    r.removeFromTop (6);
-    chooseButton.setBounds (r.removeFromTop (30));
-    r.removeFromTop (6);
-    folderBox.setBounds (r.removeFromTop (26));
-    r.removeFromTop (10);
-
-    const int labelW = 210;
-    auto row = [&r, labelW] (int h) { auto x = r.removeFromTop (h); r.removeFromTop (8); return x.withTrimmedLeft (labelW); };
-
-    instrumentBox.setBounds (row (28));
-    auto buttons = r.removeFromTop (30);
-    r.removeFromTop (8);
-    prevButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2, 0));
-    nextButton.setBounds (buttons.reduced (2, 0));
-    statusBox.setBounds (r.removeFromTop (26));
-    r.removeFromTop (10);
-    volumeSlider.setBounds (row (26));
-    sensSlider.setBounds (row (26));
-    releaseBox.setBounds (row (28));
+    tabs.setBounds (getLocalBounds());
 }
 
 bool ToyEditor::keyPressed (const KeyPress& k)
 {
-    if (k.getModifiers().isAltDown() && ! k.getModifiers().isCtrlDown())
+    if (k.getModifiers().isAltDown() && ! k.getModifiers().isCtrlDown() && play != nullptr)
     {
         const auto c = k.getKeyCode();
-        if (c == '1') { announceNext = true; proc.stepInstrument (-1); return true; }
-        if (c == '2') { announceNext = true; proc.stepInstrument (1); return true; }
-        if (c == '3') { chooseFolder(); return true; }
+        if (c == '1') { play->step (-1); return true; }
+        if (c == '2') { play->step (1); return true; }
+        if (c == '3') { tabs.setCurrentTabIndex (0); play->chooseFolder(); return true; }
     }
     return false;
-}
-
-void ToyEditor::changeListenerCallback (ChangeBroadcaster*)
-{
-    refresh();
-}
-
-void ToyEditor::refresh()
-{
-    const auto names = proc.getInstrumentNames();
-    if (names != shownNames)
-    {
-        shownNames = names;
-        instrumentBox.clear (dontSendNotification);
-        instrumentBox.addItemList (names, 1);
-    }
-    instrumentBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
-
-    folderBox.setText (proc.getRoot().getFullPathName(), dontSendNotification);
-
-    const auto st = proc.getStatus();
-    if (st != lastStatus)
-    {
-        lastStatus = st;
-        statusBox.setText (st, dontSendNotification);
-        if (announceNext)
-        {
-            announceNext = false;
-            AccessibilityHandler::postAnnouncement (st, AccessibilityHandler::AnnouncementPriority::high);
-        }
-    }
-}
-
-void ToyEditor::chooseFolder()
-{
-    auto start = proc.getRoot();
-    chooser = std::make_unique<FileChooser> (ro ("Alege folderul cu instrumente"), start);
-    SafePointer<ToyEditor> safe (this);
-    chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectDirectories,
-                          [safe] (const FileChooser& fc)
-                          {
-                              if (safe == nullptr)
-                                  return;
-                              auto f = fc.getResult();
-                              if (f.isDirectory())
-                              {
-                                  safe->announceNext = true;
-                                  safe->proc.setRoot (f);
-                              }
-                              safe->instrumentBox.grabKeyboardFocus();
-                          });
 }
