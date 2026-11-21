@@ -20,6 +20,7 @@ PrivilegesRequired=admin
 UsedUserAreasWarning=no
 WizardStyle=modern
 UninstallDisplayName=Ceamakito's toy
+CloseApplications=no
 
 [Languages]
 #if FileExists(AddBackslash(CompilerPath) + "Languages\Romanian.isl")
@@ -45,3 +46,12 @@ Name: "{group}\Citeste-ma"; Filename: "{app}\CITESTE-MA.txt"
 
 [Run]
 Filename: "{app}\Ceamakitos toy.exe"; Description: "Deschide Ceamakito's toy"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Ceamakitos toy.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
+
+[Code]
+function InitializeSetup(): Boolean;
+begin
+  // la actualizarea singura, aplicatia apuca sa se inchida inainte sa fie inlocuita
+  if WizardSilent then Sleep(3000);
+  Result := True;
+end;

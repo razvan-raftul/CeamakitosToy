@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Updater.h"
 #include <algorithm>
 #include <cmath>
 
@@ -78,6 +79,8 @@ ToyProcessor::ToyProcessor()
 
 ToyProcessor::~ToyProcessor()
 {
+    if (wrapperType == wrapperType_Standalone)
+        stopUpdateCheck();
     cancelPendingUpdate();
     apvts.removeParameterListener ("instrument", this);
     apvts.removeParameterListener ("reincarca", this);

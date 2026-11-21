@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "Updater.h"
 
 using namespace juce;
 
@@ -562,6 +563,9 @@ ToyEditor::ToyEditor (ToyProcessor& p)
 
     setTitle ("Ceamakito's toy");
     setSize (700, 600);
+
+    if (p.wrapperType == AudioProcessor::wrapperType_Standalone)
+        startUpdateCheck();
 
     SafePointer<ToyEditor> safe (this);
     Timer::callAfterDelay (400, [safe]

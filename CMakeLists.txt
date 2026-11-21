@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
-project(CeamakitosToy VERSION 0.1.0)
+if(NOT TOY_VERSION)
+  set(TOY_VERSION 0.1.0)
+endif()
+project(CeamakitosToy VERSION ${TOY_VERSION})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -28,7 +31,8 @@ juce_add_plugin(CeamakitosToy
 
 target_sources(CeamakitosToy PRIVATE
   Source/PluginProcessor.cpp
-  Source/PluginEditor.cpp)
+  Source/PluginEditor.cpp
+  Source/Updater.cpp)
 
 target_compile_definitions(CeamakitosToy PUBLIC
   JUCE_WEB_BROWSER=0
