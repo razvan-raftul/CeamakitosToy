@@ -26,6 +26,12 @@ jobs:
             exit 1
           }
 
+      - name: Show version
+        shell: pwsh
+        run: |
+          $d = Get-ChildItem -Recurse build -Filter JucePluginDefines.h | Select-Object -First 1
+          Select-String -Path $d.FullName -Pattern "VersionString" | ForEach-Object { Write-Output ("::notice::" + $_.Line.Trim()) }
+
       - name: NVDA controller client
         shell: pwsh
         run: |

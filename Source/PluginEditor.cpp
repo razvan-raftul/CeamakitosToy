@@ -56,7 +56,7 @@ public:
         versionBox.setReadOnly (true);
         versionBox.setCaretVisible (true);
         versionBox.setTitle ("Versiunea");
-        versionBox.setText (ro ("Versiunea ") + JucePlugin_VersionString, dontSendNotification);
+        versionBox.setText (ro ("Versiunea ") + TOY_VERSION_STRING, dontSendNotification);
         addAndMakeVisible (versionBox);
 
         setupLabel (volumeLabel, "Volum general (dB)", volumeSlider);

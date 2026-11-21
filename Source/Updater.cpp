@@ -84,7 +84,7 @@ public:
 
         auto json = JSON::parse (stream->readEntireStreamAsString());
         const String tag = json["tag_name"].toString();
-        if (tag.isEmpty() || ! isNewer (tag, JucePlugin_VersionString))
+        if (tag.isEmpty() || ! isNewer (tag, TOY_VERSION_STRING))
             return finish (State::nothing);
 
         String assetUrl;
@@ -95,8 +95,18 @@ public:
         if (assetUrl.isEmpty())
             return finish (State::nothing);
 
+        // nu incerc la nesfarsit aceeasi actualizare daca n-a mers
+        auto mark = File::getSpecialLocation (File::userApplicationDataDirectory)
+                        .getChildFile ("Ceamakito's toy").getChildFile ("actualizare.txt");
+        if (mark.existsAsFile() && mark.loadFileAsString().trim() == tag
+            && Time::getCurrentTime() - mark.getLastModificationTime() < RelativeTime::hours (6))
+            return finish (State::nothing);
+
         if (reaperIsOpen())
             return finish (State::reaperOpen);
+
+        mark.getParentDirectory().createDirectory();
+        mark.replaceWithText (tag);
 
         state = State::downloading;
 

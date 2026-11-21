@@ -15,6 +15,7 @@ FetchContent_Declare(JUCE
 FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(CeamakitosToy
+  VERSION ${TOY_VERSION}
   COMPANY_NAME "Razvan"
   PLUGIN_MANUFACTURER_CODE Razv
   PLUGIN_CODE Cmkt
@@ -39,7 +40,8 @@ target_compile_definitions(CeamakitosToy PUBLIC
   JUCE_WEB_BROWSER=0
   JUCE_USE_CURL=0
   JUCE_VST3_CAN_REPLACE_VST2=0
-  JUCE_DISPLAY_SPLASH_SCREEN=0)
+  JUCE_DISPLAY_SPLASH_SCREEN=0
+  TOY_VERSION_STRING="${TOY_VERSION}")
 
 if(MSVC)
   target_compile_options(CeamakitosToy PRIVATE /utf-8)
