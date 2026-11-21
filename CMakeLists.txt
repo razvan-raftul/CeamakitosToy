@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-if(NOT TOY_VERSION)
+if(NOT DEFINED TOY_VERSION OR TOY_VERSION STREQUAL "")
   set(TOY_VERSION 0.1.0)
 endif()
 project(CeamakitosToy VERSION ${TOY_VERSION})
