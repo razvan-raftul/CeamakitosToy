@@ -28,9 +28,10 @@ jobs:
 
       - name: Show version
         shell: pwsh
+        continue-on-error: true
         run: |
-          $d = Get-ChildItem -Recurse build -Filter JucePluginDefines.h | Select-Object -First 1
-          Select-String -Path $d.FullName -Pattern "VersionString" | ForEach-Object { Write-Output ("::notice::" + $_.Line.Trim()) }
+          $m = Select-String -Path build/CeamakitosToy_SharedCode.vcxproj -Pattern 'TOY_VERSION_STRING=[^;]*|JucePlugin_VersionString=[^;]*' -AllMatches | Select-Object -First 1
+          $m.Matches | ForEach-Object { Write-Output ("::notice::" + $_.Value) }
 
       - name: NVDA controller client
         shell: pwsh
