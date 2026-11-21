@@ -770,9 +770,11 @@ void ToyTabs::updateTabFocus()
         }
 }
 
-void ToyTabs::currentTabChanged (int, const String&)
+void ToyTabs::currentTabChanged (int index, const String&)
 {
     updateTabFocus();
+    if (onTabChanged)
+        onTabChanged (index);
 }
 
 void ToyTabs::moveTab (int delta, bool absolute)
@@ -785,9 +787,6 @@ void ToyTabs::moveTab (int delta, bool absolute)
     updateTabFocus();
     if (auto* b = getTabbedButtonBar().getTabButton (target))
         b->grabKeyboardFocus();
-    // NVDA nu anunta singur fila noua cand se schimba cu sagetile: o spunem noi, ca intr-un TabControl din Windows
-    const auto name = getTabNames()[target];
-    Timer::callAfterDelay (120, [name] { speak (name + ro (" tabulator selectat")); });
 }
 
 //==============================================================================
@@ -827,11 +826,22 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     build = new BuildPanel (p);
     settings = new SettingsPanel (p, [this] { if (play != nullptr) play->announceAfterChange(); });
     const auto bg = Colour (0xff20242c);
-    tabs.addTab (ro ("Cântă"), bg, play, true);
-    tabs.addTab (ro ("Construiește instrumente"), bg, build, true);
-    tabs.addTab (ro ("Setări"), bg, settings, true);
+    // filele au doar butoanele; panourile raman mereu copii ai ferestrei (doar se ascund),
+    // altfel NVDA nu citea elementele din filele 2 si 3 dupa ce JUCE le scotea si le punea la loc
+    tabs.addTab (ro ("Cântă"), bg, nullptr, false);
+    tabs.addTab (ro ("Construiește instrumente"), bg, nullptr, false);
+    tabs.addTab (ro ("Setări"), bg, nullptr, false);
     tabs.updateTabFocus();
     addAndMakeVisible (tabs);
+    addAndMakeVisible (play);
+    addChildComponent (build);
+    addChildComponent (settings);
+    tabs.onTabChanged = [this] (int i)
+    {
+        play->setVisible (i == 0);
+        build->setVisible (i == 1);
+        settings->setVisible (i == 2);
+    };
 
     keys = std::make_unique<KeyboardMode> (p);
     addChildComponent (*keys);
@@ -854,7 +864,12 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     });
 }
 
-ToyEditor::~ToyEditor() = default;
+ToyEditor::~ToyEditor()
+{
+    delete play;
+    delete build;
+    delete settings;
+}
 
 void ToyEditor::paint (Graphics& g)
 {
@@ -864,6 +879,10 @@ void ToyEditor::paint (Graphics& g)
 void ToyEditor::resized()
 {
     tabs.setBounds (getLocalBounds());
+    const auto area = getLocalBounds().withTrimmedTop (tabs.getTabBarDepth());
+    for (Component* c : std::initializer_list<Component*> { play, build, settings })
+        if (c != nullptr)
+            c->setBounds (area);
     keys->setBounds (getLocalBounds().removeFromBottom (60).reduced (12, 8));
 }
 
@@ -879,8 +898,10 @@ void ToyEditor::focusTab (int index)
             return;
         if (index == 0 && safe->play != nullptr)
             safe->play->instrumentBox.grabKeyboardFocus();
-        else if (auto* c = safe->tabs.getCurrentContentComponent())
-            c->grabKeyboardFocus();
+        else if (index == 1 && safe->build != nullptr)
+            safe->build->grabKeyboardFocus();
+        else if (index == 2 && safe->settings != nullptr)
+            safe->settings->grabKeyboardFocus();
     });
 }
 

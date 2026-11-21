@@ -16,6 +16,7 @@ public:
     juce::TabBarButton* createTabButton (const juce::String& name, int index) override;
     void updateTabFocus();
     void moveTab (int delta, bool absolute = false);
+    std::function<void (int)> onTabChanged;
 };
 
 class ToyEditor : public juce::AudioProcessorEditor
