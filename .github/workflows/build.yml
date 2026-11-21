@@ -26,6 +26,19 @@ jobs:
             exit 1
           }
 
+      - name: NVDA controller client
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path nvda | Out-Null
+          try {
+            Invoke-WebRequest -Uri "https://download.nvaccess.org/releases/2024.4.1/nvda_2024.4.1_controllerClient.zip" -OutFile nvda/cc.zip
+            Expand-Archive nvda/cc.zip -DestinationPath nvda/x -Force
+            $dll = Get-ChildItem -Recurse nvda/x -Filter "nvdaControllerClient*.dll" | Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
+            Copy-Item $dll.FullName "nvda/nvdaControllerClient.dll"
+            Get-ChildItem -Recurse nvda/x | Select-Object FullName
+          } catch { Write-Output "::warning::Nu am putut lua nvdaControllerClient: $_" }
+          if (-not (Test-Path "nvda/nvdaControllerClient.dll")) { New-Item nvda/lipsa.txt -ItemType File | Out-Null }
+
       - name: Installer
         shell: pwsh
         env:

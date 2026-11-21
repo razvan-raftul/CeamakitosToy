@@ -32,7 +32,8 @@ juce_add_plugin(CeamakitosToy
 target_sources(CeamakitosToy PRIVATE
   Source/PluginProcessor.cpp
   Source/PluginEditor.cpp
-  Source/Updater.cpp)
+  Source/Updater.cpp
+  Source/Speech.cpp)
 
 target_compile_definitions(CeamakitosToy PUBLIC
   JUCE_WEB_BROWSER=0

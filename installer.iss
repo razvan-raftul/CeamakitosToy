@@ -36,6 +36,8 @@ Type: filesandordirs; Name: "{localappdata}\Programs\Common\VST3\Ceamakitos toy.
 Source: "build\CeamakitosToy_artefacts\Release\VST3\Ceamakitos toy.vst3\*"; DestDir: "{commoncf64}\VST3\Ceamakitos toy.vst3"; Flags: recursesubdirs ignoreversion
 Source: "build\CeamakitosToy_artefacts\Release\Standalone\Ceamakitos toy.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "CITESTE-MA.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "nvda\nvdaControllerClient.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "nvda\nvdaControllerClient.dll"; DestDir: "{commoncf64}\VST3\Ceamakitos toy.vst3\Contents\x86_64-win"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "reaper\*"; DestDir: "{userappdata}\REAPER\Scripts\Ceamakito's toy"; Flags: ignoreversion
 Source: "instrumente\*"; DestDir: "{userdocs}\Ceamakito's toy\Instrumente"; Flags: recursesubdirs onlyifdoesntexist
 

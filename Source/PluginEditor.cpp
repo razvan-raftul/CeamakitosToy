@@ -1,12 +1,10 @@
 #include "PluginEditor.h"
 #include "Updater.h"
+#include "Speech.h"
 
 using namespace juce;
 
-static void announce (const String& s)
-{
-    AccessibilityHandler::postAnnouncement (s, AccessibilityHandler::AnnouncementPriority::high);
-}
+static void announce (const String& s) { speak (s); }
 
 static void setupLabel (Label& l, const String& text, Component& target)
 {
@@ -21,8 +19,9 @@ class PlayPanel : public Component, private ChangeListener
 {
 public:
     explicit PlayPanel (ToyProcessor& p)
-        : proc (p), keyboard (p.keyboardState, MidiKeyboardComponent::horizontalKeyboard)
+        : proc (p)
     {
+        setFocusContainerType (FocusContainerType::keyboardFocusContainer);
         chooseButton.setButtonText (ro ("Alege folderul cu instrumente (Alt 3)"));
         chooseButton.onClick = [this] { chooseFolder(); };
         addAndMakeVisible (chooseButton);
@@ -56,13 +55,14 @@ public:
 
         setupLabel (volumeLabel, "Volum general (dB)", volumeSlider);
         volumeSlider.setSliderStyle (Slider::LinearHorizontal);
-        volumeSlider.setTextBoxStyle (Slider::TextBoxRight, false, 70, 24);
+        volumeSlider.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
+        volumeSlider.setTextValueSuffix (" dB");
         addAndMakeVisible (volumeSlider);
         volumeAtt = std::make_unique<SA> (proc.apvts, "volum", volumeSlider);
 
         setupLabel (sensLabel, ro ("Cât contează cât de tare apeși clapa"), sensSlider);
         sensSlider.setSliderStyle (Slider::LinearHorizontal);
-        sensSlider.setTextBoxStyle (Slider::TextBoxRight, false, 70, 24);
+        sensSlider.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
         addAndMakeVisible (sensSlider);
         sensAtt = std::make_unique<SA> (proc.apvts, "sensibilitate", sensSlider);
 
@@ -71,13 +71,9 @@ public:
         addAndMakeVisible (releaseBox);
         releaseAtt = std::make_unique<CA> (proc.apvts, "ridicare", releaseBox);
 
-        keyboard.setTitle (ro ("Claviatură. Cânți cu tastele A, W, S, E, D, F și așa mai departe"));
-        keyboard.setWantsKeyboardFocus (true);
-        addAndMakeVisible (keyboard);
-
         int order = 1;
         for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &instrumentBox, &prevButton, &nextButton,
-                                                               &statusBox, &volumeSlider, &sensSlider, &releaseBox, &keyboard })
+                                                               &statusBox, &volumeSlider, &sensSlider, &releaseBox })
             c->setExplicitFocusOrder (order++);
 
         proc.changes.addChangeListener (this);
@@ -107,7 +103,6 @@ public:
         volumeSlider.setBounds (row (26));
         sensSlider.setBounds (row (26));
         releaseBox.setBounds (row (28));
-        keyboard.setBounds (r.removeFromTop (90));
     }
 
     void step (int d) { announceNext = true; proc.stepInstrument (d); }
@@ -145,8 +140,11 @@ private:
             instrumentBox.clear (dontSendNotification);
             instrumentBox.addItemList (names, 1);
         }
-        instrumentBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
-        folderBox.setText (proc.getRoot().getFullPathName(), dontSendNotification);
+        if (instrumentBox.getSelectedItemIndex() != proc.getCurrentIndex())
+            instrumentBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
+        const auto folder = proc.getRoot().getFullPathName();
+        if (folderBox.getText() != folder)
+            folderBox.setText (folder, dontSendNotification);
 
         const auto st = proc.getStatus();
         if (st != lastStatus)
@@ -167,7 +165,6 @@ private:
     Label instrumentLabel, volumeLabel, sensLabel, releaseLabel;
     Slider volumeSlider, sensSlider;
     ComboBox releaseBox;
-    MidiKeyboardComponent keyboard;
 
     using SA = AudioProcessorValueTreeState::SliderAttachment;
     using CA = AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -187,6 +184,7 @@ class BuildPanel : public Component, private ChangeListener, private ListBoxMode
 public:
     explicit BuildPanel (ToyProcessor& p) : proc (p)
     {
+        setFocusContainerType (FocusContainerType::keyboardFocusContainer);
         setupLabel (newLabel, "Numele instrumentului nou", newName);
         addAndMakeVisible (newName);
         newName.onReturnKey = [this] { createInstrument(); };
@@ -331,7 +329,8 @@ private:
             instBox.clear (dontSendNotification);
             instBox.addItemList (names, 1);
         }
-        instBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
+        if (instBox.getSelectedItemIndex() != proc.getCurrentIndex())
+            instBox.setSelectedItemIndex (proc.getCurrentIndex(), dontSendNotification);
     }
 
     void changeListenerCallback (ChangeBroadcaster*) override
@@ -550,6 +549,90 @@ private:
 };
 
 //==============================================================================
+// Claviatura cu tastele calculatorului, pornita cu Control B (ca in REAPER)
+class KeyboardMode : public Component
+{
+public:
+    explicit KeyboardMode (ToyProcessor& p) : proc (p)
+    {
+        setWantsKeyboardFocus (true);
+        setTitle (ro ("Claviatură"));
+        setDescription (ro ("Cânți cu tastele Z S X D C pentru octava de jos și Q 2 W 3 E pentru cea de sus. Săgeată sus și jos schimbă octava. Control B sau Escape o închide."));
+    }
+
+    void paint (Graphics& g) override
+    {
+        g.fillAll (Colour (0xff2c3340));
+        g.setColour (Colours::white);
+        g.setFont (FontOptions (16.0f));
+        g.drawText (ro ("Claviatură pornită, octava ") + String (base / 12 - 1), getLocalBounds(), Justification::centred);
+    }
+
+    bool keyPressed (const KeyPress& k) override
+    {
+        const auto mods = k.getModifiers();
+        if (mods.isCtrlDown() || mods.isAltDown() || mods.isCommandDown())
+            return false;
+        if (k.getKeyCode() == KeyPress::upKey || k.getKeyCode() == KeyPress::downKey)
+        {
+            allOff();
+            base = jlimit (12, 96, base + (k.getKeyCode() == KeyPress::upKey ? 12 : -12));
+            speak (ro ("Octava ") + String (base / 12 - 1));
+            repaint();
+            return true;
+        }
+        const int off = offsetFor (CharacterFunctions::toLowerCase (k.getTextCharacter()));
+        if (off < 0)
+            return false;
+        const int code = k.getKeyCode();
+        for (auto& h : held)
+            if (h.code == code)
+                return true;   // repetare automata
+        const int note = jlimit (0, 127, base + off);
+        held.add ({ code, note });
+        proc.keyboardState.noteOn (1, note, 0.8f);
+        return true;
+    }
+
+    bool keyStateChanged (bool) override
+    {
+        for (int i = held.size(); --i >= 0;)
+            if (! KeyPress::isKeyCurrentlyDown (held[i].code))
+            {
+                proc.keyboardState.noteOff (1, held[i].note, 0.0f);
+                held.remove (i);
+            }
+        return false;
+    }
+
+    void focusLost (FocusChangeType) override { allOff(); }
+
+    void allOff()
+    {
+        for (auto& h : held)
+            proc.keyboardState.noteOff (1, h.note, 0.0f);
+        held.clear();
+    }
+
+private:
+    static int offsetFor (juce_wchar c)
+    {
+        static const char* low  = "zsxdcvgbhnjm,l.;/";
+        static const char* high = "q2w3er5t6y7ui9o0p";
+        for (int i = 0; low[i] != 0; ++i)
+            if (c == (juce_wchar) low[i]) return i;
+        for (int i = 0; high[i] != 0; ++i)
+            if (c == (juce_wchar) high[i]) return 12 + i;
+        return -1;
+    }
+
+    struct Held { int code, note; };
+    ToyProcessor& proc;
+    Array<Held> held;
+    int base = 48;
+};
+
+//==============================================================================
 ToyEditor::ToyEditor (ToyProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
@@ -558,11 +641,15 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     const auto bg = Colour (0xff20242c);
     tabs.addTab (ro ("Cântă"), bg, play, true);
     tabs.addTab (ro ("Construiește instrumente"), bg, build, true);
-    tabs.setTitle ("Ceamakito's toy");
+    for (int i = 0; i < tabs.getNumTabs(); ++i)
+        if (auto* b = tabs.getTabbedButtonBar().getTabButton (i))
+            b->setWantsKeyboardFocus (false);
     addAndMakeVisible (tabs);
 
-    setTitle ("Ceamakito's toy");
-    setSize (700, 600);
+    keys = std::make_unique<KeyboardMode> (p);
+    addChildComponent (*keys);
+
+    setSize (700, 560);
 
     if (p.wrapperType == AudioProcessor::wrapperType_Standalone)
         startUpdateCheck();
@@ -585,16 +672,69 @@ void ToyEditor::paint (Graphics& g)
 void ToyEditor::resized()
 {
     tabs.setBounds (getLocalBounds());
+    keys->setBounds (getLocalBounds().removeFromBottom (60).reduced (12, 8));
+}
+
+void ToyEditor::focusTab (int index)
+{
+    keys->setVisible (false);
+    tabs.setCurrentTabIndex (index);
+    speak (ro ("Fila ") + tabs.getTabNames()[index]);
+    SafePointer<ToyEditor> safe (this);
+    Timer::callAfterDelay (150, [safe, index]
+    {
+        if (safe == nullptr)
+            return;
+        if (index == 0 && safe->play != nullptr)
+            safe->play->instrumentBox.grabKeyboardFocus();
+        else if (auto* c = safe->tabs.getCurrentContentComponent())
+            c->grabKeyboardFocus();
+    });
+}
+
+void ToyEditor::toggleKeyboard()
+{
+    if (keys->isVisible())
+    {
+        keys->allOff();
+        keys->setVisible (false);
+        speak (ro ("Claviatură oprită"));
+        if (play != nullptr && tabs.getCurrentTabIndex() == 0)
+            play->instrumentBox.grabKeyboardFocus();
+        return;
+    }
+    keys->setVisible (true);
+    keys->toFront (false);
+    keys->grabKeyboardFocus();
+    speak (ro ("Claviatură pornită"));
 }
 
 bool ToyEditor::keyPressed (const KeyPress& k)
 {
-    if (k.getModifiers().isAltDown() && ! k.getModifiers().isCtrlDown() && play != nullptr)
+    const auto m = k.getModifiers();
+    const auto c = k.getKeyCode();
+
+    if (m.isCtrlDown() && ! m.isAltDown() && c == KeyPress::tabKey)
     {
-        const auto c = k.getKeyCode();
+        const int n = tabs.getNumTabs();
+        focusTab ((tabs.getCurrentTabIndex() + (m.isShiftDown() ? n - 1 : 1)) % n);
+        return true;
+    }
+    if (m.isCtrlDown() && ! m.isAltDown() && (c == 'B' || c == 'b'))
+    {
+        toggleKeyboard();
+        return true;
+    }
+    if (c == KeyPress::escapeKey && keys->isVisible())
+    {
+        toggleKeyboard();
+        return true;
+    }
+    if (m.isAltDown() && ! m.isCtrlDown() && play != nullptr)
+    {
         if (c == '1') { play->step (-1); return true; }
         if (c == '2') { play->step (1); return true; }
-        if (c == '3') { tabs.setCurrentTabIndex (0); play->chooseFolder(); return true; }
+        if (c == '3') { focusTab (0); play->chooseFolder(); return true; }
     }
     return false;
 }

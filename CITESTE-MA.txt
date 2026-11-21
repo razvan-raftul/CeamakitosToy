@@ -7,16 +7,19 @@ Pune pluginul în C:\Program Files\Common Files\VST3, folderul unde îl caută t
 Pune aplicația Ceamakito's toy pe desktop.
 Pune scripturile pentru REAPER, cu Alt 1, Alt 2 și Alt 3.
 Pune instrumentele de test în Documente\Ceamakito's toy\Instrumente.
+Aplicația de pe desktop se actualizează singură când o deschizi, dacă am pus o versiune nouă pe GitHub. Dacă REAPER e deschis, te roagă să-l închizi întâi.
 Când deschizi după aceea un program de muzică, el găsește singur pluginul nou. În REAPER apare ca VST3i: Ceamakito's toy (Razvan).
 
 Fereastra are două file
-Fila Cântă: alegi folderul cu instrumente, alegi instrumentul, schimbi volumul și cât contează cât de tare apeși clapa. Jos e o claviatură: când ajungi pe ea cu Tab, cânți cu tastele A, W, S, E, D, F și așa mai departe.
+Treci de la o filă la alta cu Control Tab, înapoi cu Control Shift Tab.
+Fila Cântă: alegi folderul cu instrumente, alegi instrumentul, schimbi volumul și cât contează cât de tare apeși clapa.
 Fila Construiește instrumente: scrii numele instrumentului nou și apeși Creează instrumentul. Apoi apeși Adaugă sunete și alegi WAV-urile. Fiecare sunet se pune pe clapa următoare.
 În lista cu sunete alegi un sunet și apoi poți să-l asculți, să-l pui pe clapa pe care o apeși pe claviatură sau să-l scoți din instrument.
 Sub listă schimbi pentru sunetul ales clapa de jos, clapa de sus, clapa pe care sună neschimbat, grupa și cât de tare trebuie apăsat.
 Tot ce schimbi se salvează singur.
 
 Scurtături
+Control B: pornește sau oprește claviatura. Cânți cu Z S X D C V pentru octava de jos și cu Q 2 W 3 E R pentru cea de sus, ca în REAPER. Săgeată sus și săgeată jos schimbă octava. Escape o oprește.
 Alt 1: instrumentul anterior.
 Alt 2: instrumentul următor.
 Alt 3: alegi folderul cu instrumente.

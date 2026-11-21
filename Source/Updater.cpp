@@ -1,5 +1,6 @@
 #include "Updater.h"
 #include "PluginProcessor.h"
+#include "Speech.h"
 
 using namespace juce;
 
@@ -29,10 +30,7 @@ bool reaperIsOpen()
     return p.readAllProcessOutput().containsIgnoreCase ("reaper.exe");
 }
 
-void say (const String& s)
-{
-    AccessibilityHandler::postAnnouncement (s, AccessibilityHandler::AnnouncementPriority::high);
-}
+void say (const String& s) { speak (s); }
 
 class UpdateContent : public Component
 {
