@@ -20,7 +20,6 @@ class PlayPanel : public Component, private ChangeListener
 public:
     explicit PlayPanel (ToyProcessor& p) : proc (p)
     {
-        setFocusContainerType (FocusContainerType::keyboardFocusContainer);
 
         setupLabel (instrumentLabel, "Instrument", instrumentBox);
         instrumentBox.onChange = [this]
@@ -115,7 +114,6 @@ class SettingsPanel : public Component, private ChangeListener
 public:
     SettingsPanel (ToyProcessor& p, std::function<void()> chosen) : proc (p), onFolderChosen (std::move (chosen))
     {
-        setFocusContainerType (FocusContainerType::keyboardFocusContainer);
 
         chooseButton.setButtonText (ro ("Alege folderul cu instrumente (Alt 3)"));
         chooseButton.onClick = [this] { chooseFolder(); };
@@ -237,7 +235,6 @@ class BuildPanel : public Component, private ChangeListener, private ListBoxMode
 public:
     explicit BuildPanel (ToyProcessor& p) : proc (p)
     {
-        setFocusContainerType (FocusContainerType::keyboardFocusContainer);
         setupLabel (newLabel, "Numele instrumentului nou", newName);
         addAndMakeVisible (newName);
         newName.onReturnKey = [this] { createInstrument(); };
@@ -697,6 +694,70 @@ private:
 };
 
 //==============================================================================
+namespace
+{
+class ToyTabButton : public TabBarButton
+{
+public:
+    ToyTabButton (const String& name, TabbedButtonBar& bar, ToyTabs& owner)
+        : TabBarButton (name, bar), tabs (owner) {}
+
+    bool keyPressed (const KeyPress& k) override
+    {
+        const auto m = k.getModifiers();
+        if (! m.isAnyModifierKeyDown())
+        {
+            const int c = k.getKeyCode();
+            if (c == KeyPress::rightKey || c == KeyPress::downKey) { tabs.moveTab (1); return true; }
+            if (c == KeyPress::leftKey  || c == KeyPress::upKey)   { tabs.moveTab (-1); return true; }
+            if (c == KeyPress::homeKey) { tabs.moveTab (0, true); return true; }
+            if (c == KeyPress::endKey)  { tabs.moveTab (tabs.getNumTabs() - 1, true); return true; }
+            if (c == KeyPress::spaceKey || c == KeyPress::returnKey) return true;
+        }
+        return TabBarButton::keyPressed (k);
+    }
+
+private:
+    ToyTabs& tabs;
+};
+}
+
+TabBarButton* ToyTabs::createTabButton (const String& name, int)
+{
+    return new ToyTabButton (name, getTabbedButtonBar(), *this);
+}
+
+void ToyTabs::updateTabFocus()
+{
+    const int n = getNumTabs(), cur = getCurrentTabIndex();
+    const auto names = getTabNames();
+    for (int i = 0; i < n; ++i)
+        if (auto* b = getTabbedButtonBar().getTabButton (i))
+        {
+            b->setWantsKeyboardFocus (i == cur);
+            b->setExplicitFocusOrder (1);
+            b->setTitle (names[i] + ro (", fila ") + String (i + 1) + ro (" din ") + String (n));
+        }
+}
+
+void ToyTabs::currentTabChanged (int, const String&)
+{
+    updateTabFocus();
+}
+
+void ToyTabs::moveTab (int delta, bool absolute)
+{
+    const int n = getNumTabs();
+    if (n == 0)
+        return;
+    const int target = absolute ? jlimit (0, n - 1, delta) : ((getCurrentTabIndex() + delta) % n + n) % n;
+    setCurrentTabIndex (target);
+    updateTabFocus();
+    if (auto* b = getTabbedButtonBar().getTabButton (target))
+        b->grabKeyboardFocus();
+}
+
+//==============================================================================
 ToyEditor::ToyEditor (ToyProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
@@ -707,9 +768,7 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     tabs.addTab (ro ("Cântă"), bg, play, true);
     tabs.addTab (ro ("Construiește instrumente"), bg, build, true);
     tabs.addTab (ro ("Setări"), bg, settings, true);
-    for (int i = 0; i < tabs.getNumTabs(); ++i)
-        if (auto* b = tabs.getTabbedButtonBar().getTabButton (i))
-            b->setWantsKeyboardFocus (false);
+    tabs.updateTabFocus();
     addAndMakeVisible (tabs);
 
     keys = std::make_unique<KeyboardMode> (p);
@@ -723,8 +782,9 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     SafePointer<ToyEditor> safe (this);
     Timer::callAfterDelay (400, [safe]
     {
-        if (safe != nullptr && safe->isShowing() && safe->play != nullptr)
-            safe->play->instrumentBox.grabKeyboardFocus();
+        if (safe != nullptr && safe->isShowing())
+            if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
+                b->grabKeyboardFocus();
     });
 }
 

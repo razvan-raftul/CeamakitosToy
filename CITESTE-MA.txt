@@ -12,7 +12,8 @@ Când deschizi după aceea un program de muzică, el găsește singur pluginul n
 
 Fereastra are trei file
 Control 1: fila Cântă. Control 2: fila Construiește instrumente. Control 3: fila Setări, ultima.
-Treci și cu Control Tab la fila următoare, înapoi cu Control Shift Tab. Tab și Shift Tab se plimbă doar prin fila deschisă.
+Ajungi pe rândul cu file cu Tab sau Shift Tab; cu săgeată stânga și dreapta treci de la o filă la alta, ca în Media Studio. Home duce la prima filă, End la ultima. Când deschizi fereastra, cursorul e pe rândul cu file.
+Treci și cu Control Tab la fila următoare, înapoi cu Control Shift Tab. Tab și Shift Tab trec prin rândul cu file și apoi prin ce e în fila deschisă.
 Fila Cântă: lista Instrument, butoanele Instrumentul anterior și Instrumentul următor și căsuța care spune ce e încărcat.
 Fila Construiește instrumente: scrii numele instrumentului nou și apeși Creează instrumentul. Apoi apeși Adaugă sunete și alegi WAV-urile. Fiecare sunet se pune pe clapa următoare.
 În lista cu sunete alegi un sunet și apoi poți să-l asculți, să-l pui pe clapa pe care o apeși pe claviatură sau să-l scoți din instrument.
