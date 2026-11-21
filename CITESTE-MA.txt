@@ -1,0 +1,24 @@
+Ceamakito's toy
+Un instrument virtual VST3, ca Kontakt: un singur plugin cu mai multe instrumente făcute din WAV-uri.
+Merge în REAPER și în orice alt program care încarcă VST3.
+
+Unde se pune
+Folderul "Ceamakito's toy.vst3" merge în C:\Users\Razvan\AppData\Local\Programs\Common\VST3.
+REAPER caută deja acolo. În REAPER îl găsești la instrumente, cu numele Ceamakito's toy.
+
+Fereastra pluginului
+Se umblă cu Tab. Ai pe rând: butonul Alege folderul cu instrumente, căsuța cu folderul ales, lista Instrument, butoanele Instrumentul anterior și Instrumentul următor, căsuța care spune ce e încărcat, volumul general, cât contează cât de tare apeși clapa și ce se întâmplă la ridicarea clapei.
+În fereastră merg și Alt 1, Alt 2 și Alt 3.
+
+Scurtături în REAPER, și în claviatura de la Control B
+Alt 1: instrumentul anterior.
+Alt 2: instrumentul următor.
+Alt 3: alegi folderul cu instrumente, apoi instrumentul din listă.
+
+Cum arată un instrument
+Un instrument e un folder cu WAV-uri. Numele folderului e numele instrumentului.
+Dacă folderul are fișierul harta.txt, el spune pe ce clapă merge fiecare WAV. Fiecare rând arată așa:
+36 36 36 0 127 0 | kick.wav
+Numerele sunt: clapa de jos, clapa de sus, clapa pe care sună WAV-ul neschimbat, cât de tare minim, cât de tare maxim, grupa.
+Sunetele din aceeași grupă se taie unul pe altul, ca hi-hat-ul închis și cel deschis. Grupa 0 înseamnă fără grupă.
+Dacă nu există harta.txt, WAV-urile se pun în ordine alfabetică, câte unul pe clapă, de la clapa 36.
