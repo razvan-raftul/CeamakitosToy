@@ -785,6 +785,9 @@ void ToyTabs::moveTab (int delta, bool absolute)
     updateTabFocus();
     if (auto* b = getTabbedButtonBar().getTabButton (target))
         b->grabKeyboardFocus();
+    // NVDA nu anunta singur fila noua cand se schimba cu sagetile: o spunem noi, ca intr-un TabControl din Windows
+    const auto name = getTabNames()[target];
+    Timer::callAfterDelay (120, [name] { speak (name + ro (" tabulator selectat")); });
 }
 
 //==============================================================================
