@@ -132,12 +132,16 @@ public:
         volumeSlider.setTextValueSuffix (" dB");
         addAndMakeVisible (volumeSlider);
         volumeAtt = std::make_unique<SA> (proc.apvts, "volum", volumeSlider);
+        volumeSlider.setWantsKeyboardFocus (true);
 
         setupLabel (sensLabel, ro ("Cât contează cât de tare apeși clapa"), sensSlider);
         sensSlider.setSliderStyle (Slider::LinearHorizontal);
         sensSlider.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
         addAndMakeVisible (sensSlider);
         sensAtt = std::make_unique<SA> (proc.apvts, "sensibilitate", sensSlider);
+        sensSlider.setWantsKeyboardFocus (true);
+        sensSlider.textFromValueFunction = [] (double v) { return String (roundToInt (v * 100.0)) + " la suta"; };
+        sensSlider.updateText();
 
         setupLabel (releaseLabel, "La ridicarea clapei", releaseBox);
         releaseBox.addItemList ({ ro ("Sunetul continuă până la capăt"), ro ("Sunetul se oprește") }, 1);
