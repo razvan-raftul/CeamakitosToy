@@ -326,6 +326,15 @@ public:
         addButton.onClick = [this] { addSounds(); };
         addAndMakeVisible (addButton);
 
+        fillToggle.setButtonText (ro ("Umple clapele dintre note"));
+        fillToggle.setToggleState (fillFile().loadFileAsString().trim() != "0", dontSendNotification);
+        fillToggle.onClick = [this]
+        {
+            fillFile().getParentDirectory().createDirectory();
+            fillFile().replaceWithText (fillToggle.getToggleState() ? "1" : "0");
+        };
+        addAndMakeVisible (fillToggle);
+
         list.setModel (this);
         list.setTitle ("Sunetele instrumentului");
         list.setRowHeight (24);
@@ -369,7 +378,7 @@ public:
         setupCombo (vhiBox, vhiLabel, ro ("Cel mai tare la care sună"), levels);
 
         int order = 1;
-        for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &list, &listenButton,
+        for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &fillToggle, &list, &listenButton,
                                                                &learnButton, &removeButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
             c->setExplicitFocusOrder (order++);
 
@@ -391,6 +400,8 @@ public:
         newName.setBounds (top.withTrimmedRight (6));
         instBox.setBounds (row (26));
         addButton.setBounds (r.removeFromTop (28));
+        r.removeFromTop (6);
+        fillToggle.setBounds (r.removeFromTop (24));
         r.removeFromTop (6);
         list.setBounds (r.removeFromTop (130));
         r.removeFromTop (6);
@@ -634,7 +645,8 @@ private:
         {
             const int n = notes[k];
             int lo, hi;
-            if (notes.size() == 1) { lo = jmax (0, n - 24); hi = jmin (127, n + 24); }
+            if (! fillToggle.getToggleState()) { lo = hi = n; }
+            else if (notes.size() == 1) { lo = jmax (0, n - 24); hi = jmin (127, n + 24); }
             else
             {
                 lo = k == 0 ? jmax (0, n - (notes[1] - n) / 2) : notes[k - 1] + (n - notes[k - 1]) / 2 + 1;
@@ -737,6 +749,12 @@ private:
     TextButton createButton, addButton, listenButton, learnButton, removeButton;
     ComboBox instBox, loBox, hiBox, rootBox, grpBox, vloBox, vhiBox;
     SpokenList list;
+    ToggleButton fillToggle;
+    static File fillFile()
+    {
+        return File::getSpecialLocation (File::userApplicationDataDirectory)
+                   .getChildFile ("Ceamakito's toy").getChildFile ("umple.txt");
+    }
     bool quietFocus = false;
 
     std::vector<ToyProcessor::MapLine> entries;
