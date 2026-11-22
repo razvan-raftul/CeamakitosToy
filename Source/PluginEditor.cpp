@@ -779,13 +779,30 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     if (p.wrapperType == AudioProcessor::wrapperType_Standalone)
         startUpdateCheck();
 
+    // JUCE face din randul cu file un container care tine Tab-ul inauntru; il deschidem,
+    // ca Tab sa treaca din rand in fila deschisa si inapoi (Shift Tab)
+    tabs.getTabbedButtonBar().setFocusContainerType (FocusContainerType::none);
+
+    // cand fereastra devine activa si nimic nu are focus, punem cursorul pe fila aleasa
     SafePointer<ToyEditor> safe (this);
-    Timer::callAfterDelay (400, [safe]
+    auto tries = std::make_shared<int> (0);
+    auto focusTabs = std::make_shared<std::function<void()>>();
+    *focusTabs = [safe, tries, focusTabs]
     {
-        if (safe != nullptr && safe->isShowing())
+        if (safe == nullptr || ++(*tries) > 40)
+            return;
+        auto* peer = safe->getPeer();
+        const bool active = peer != nullptr && peer->isFocused();
+        if (safe->isShowing() && active && ! safe->hasKeyboardFocus (true))
+        {
             if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
                 b->grabKeyboardFocus();
-    });
+            return;
+        }
+        if (! safe->hasKeyboardFocus (true))
+            Timer::callAfterDelay (250, *focusTabs);
+    };
+    Timer::callAfterDelay (300, *focusTabs);
 }
 
 ToyEditor::~ToyEditor() = default;
