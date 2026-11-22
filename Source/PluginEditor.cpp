@@ -288,6 +288,18 @@ static int dynamicFromName (const String& fileName)
     return -1;
 }
 
+// Lista care spune singura prin NVDA randul pe care esti (NVDA nu citea randurile listei JUCE)
+class SpokenList : public ListBox
+{
+public:
+    std::function<void()> onFocus;
+    void focusGained (FocusChangeType t) override
+    {
+        ListBox::focusGained (t);
+        if (onFocus) onFocus();
+    }
+};
+
 class BuildPanel : public Component, private ChangeListener, private ListBoxModel, private Timer
 {
 public:
@@ -317,6 +329,14 @@ public:
         list.setModel (this);
         list.setTitle ("Sunetele instrumentului");
         list.setRowHeight (24);
+        list.onFocus = [this]
+        {
+            if (quietFocus) { quietFocus = false; return; }
+            String t = ro ("Sunetele instrumentului, listă. ");
+            if (entries.empty()) t << ro ("Lista e goală, adaugă sunete.");
+            else t << rowText (list.getSelectedRow());
+            announce (t);
+        };
         addAndMakeVisible (list);
 
         listenButton.setButtonText (ro ("Ascultă sunetul"));
@@ -423,7 +443,19 @@ private:
         g.drawText (getNameForRow (row), 6, 0, w - 12, h, Justification::centredLeft, true);
     }
 
-    void selectedRowsChanged (int) override { showFields(); }
+    void selectedRowsChanged (int) override
+    {
+        showFields();
+        if (list.hasKeyboardFocus (true) && ! quietFocus)
+            announce (rowText (list.getSelectedRow()));
+    }
+
+    String rowText (int r)
+    {
+        if (! isPositiveAndBelow (r, (int) entries.size()))
+            return {};
+        return getNameForRow (r) + ", " + String (r + 1) + " din " + String ((int) entries.size());
+    }
 
     // --- date
     File currentDir() const { return proc.instrumentFolder (proc.getCurrentIndex()); }
@@ -467,7 +499,12 @@ private:
         list.updateContent();
         list.repaint();
         if (isPositiveAndBelow (selectRow, (int) entries.size()))
+        {
+            const bool q = quietFocus;
+            quietFocus = true;
             list.selectRow (selectRow);
+            quietFocus = q;
+        }
         proc.reloadCurrent();
     }
 
@@ -640,7 +677,9 @@ private:
         if (! without.empty())
             msg << String ((int) without.size()) << ro (" nu aveau nota în nume și le-am pus pe clapele următoare.");
         announce (msg);
+        quietFocus = true;
         list.grabKeyboardFocus();
+        quietFocus = false;
     }
 
     void listen()
@@ -697,7 +736,8 @@ private:
     TextEditor newName;
     TextButton createButton, addButton, listenButton, learnButton, removeButton;
     ComboBox instBox, loBox, hiBox, rootBox, grpBox, vloBox, vhiBox;
-    ListBox list;
+    SpokenList list;
+    bool quietFocus = false;
 
     std::vector<ToyProcessor::MapLine> entries;
     File shownDir;
