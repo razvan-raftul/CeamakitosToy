@@ -1,10 +1,4 @@
 #include "PluginEditor.h"
-#if JUCE_WINDOWS
- #ifndef NOMINMAX
-  #define NOMINMAX
- #endif
- #include <windows.h>
-#endif
 #include "Updater.h"
 #include "Speech.h"
 
@@ -723,27 +717,7 @@ public:
         return TabBarButton::keyPressed (k);
     }
 
-    // NVDA il citeste ca fila adevarata (tab item, selectat), ca intr-un TabControl din Windows
-    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override
-    {
-        struct Handler : public AccessibilityHandler
-        {
-            explicit Handler (ToyTabButton& b)
-                : AccessibilityHandler (b, AccessibilityRole::button,
-                                        AccessibilityActions().addAction (AccessibilityActionType::press,
-                                                                          [&b] { b.tabs.setCurrentTabIndex (b.getIndex()); b.tabs.updateTabFocus(); })),
-                  button (b) {}
-            AccessibleState getCurrentState() const override
-            {
-                auto st = AccessibilityHandler::getCurrentState();
-                return st;
-            }
-            String getTitle() const override { return button.getButtonText(); }
-            ToyTabButton& button;
-        };
-        return std::make_unique<Handler> (*this);
-    }
-
+private:
     ToyTabs& tabs;
 };
 }
@@ -763,16 +737,12 @@ void ToyTabs::updateTabFocus()
             b->setWantsKeyboardFocus (i == cur);
             b->setExplicitFocusOrder (1);
             b->setTitle (names[i]);
-            if (auto* h = b->getAccessibilityHandler())
-                h->notifyAccessibilityEvent (AccessibilityEvent::valueChanged);
         }
 }
 
-void ToyTabs::currentTabChanged (int index, const String&)
+void ToyTabs::currentTabChanged (int, const String&)
 {
     updateTabFocus();
-    if (onTabChanged)
-        onTabChanged (index);
 }
 
 void ToyTabs::moveTab (int delta, bool absolute)
@@ -788,35 +758,6 @@ void ToyTabs::moveTab (int delta, bool absolute)
 }
 
 //==============================================================================
-// Aplicatia de pe desktop: fereastra vine in fata si primeste tastatura (si dupa actualizare)
-static void bringToFront (Component& c)
-{
-    Process::makeForegroundProcess();
-    auto* top = c.getTopLevelComponent();
-    if (top == nullptr)
-        return;
-    top->toFront (true);
-   #if JUCE_WINDOWS
-    if (auto* peer = top->getPeer())
-    {
-        auto hwnd = (HWND) peer->getNativeHandle();
-        auto fg = GetForegroundWindow();
-        if (hwnd != nullptr && fg != hwnd)
-        {
-            const DWORD fgThread = GetWindowThreadProcessId (fg, nullptr), me = GetCurrentThreadId();
-            if (fgThread != 0 && fgThread != me)
-                AttachThreadInput (me, fgThread, TRUE);
-            ShowWindow (hwnd, SW_RESTORE);
-            BringWindowToTop (hwnd);
-            SetForegroundWindow (hwnd);
-            SetFocus (hwnd);
-            if (fgThread != 0 && fgThread != me)
-                AttachThreadInput (me, fgThread, FALSE);
-        }
-    }
-   #endif
-}
-
 ToyEditor::ToyEditor (ToyProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
@@ -824,22 +765,11 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     build = new BuildPanel (p);
     settings = new SettingsPanel (p, [this] { if (play != nullptr) play->announceAfterChange(); });
     const auto bg = Colour (0xff20242c);
-    // filele au doar butoanele; panourile raman mereu copii ai ferestrei (doar se ascund),
-    // altfel NVDA nu citea elementele din filele 2 si 3 dupa ce JUCE le scotea si le punea la loc
-    tabs.addTab (ro ("Cântă"), bg, nullptr, false);
-    tabs.addTab (ro ("Construiește instrumente"), bg, nullptr, false);
-    tabs.addTab (ro ("Setări"), bg, nullptr, false);
+    tabs.addTab (ro ("Cântă"), bg, play, true);
+    tabs.addTab (ro ("Construiește instrumente"), bg, build, true);
+    tabs.addTab (ro ("Setări"), bg, settings, true);
     tabs.updateTabFocus();
     addAndMakeVisible (tabs);
-    addAndMakeVisible (play);
-    addChildComponent (build);
-    addChildComponent (settings);
-    tabs.onTabChanged = [this] (int i)
-    {
-        play->setVisible (i == 0);
-        build->setVisible (i == 1);
-        settings->setVisible (i == 2);
-    };
 
     keys = std::make_unique<KeyboardMode> (p);
     addChildComponent (*keys);
@@ -850,24 +780,15 @@ ToyEditor::ToyEditor (ToyProcessor& p)
         startUpdateCheck();
 
     SafePointer<ToyEditor> safe (this);
-    const bool standalone = p.wrapperType == AudioProcessor::wrapperType_Standalone;
-    Timer::callAfterDelay (400, [safe, standalone]
+    Timer::callAfterDelay (400, [safe]
     {
-        if (safe == nullptr || ! safe->isShowing())
-            return;
-        if (standalone)
-            bringToFront (*safe);
-        if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
-            b->grabKeyboardFocus();
+        if (safe != nullptr && safe->isShowing())
+            if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
+                b->grabKeyboardFocus();
     });
 }
 
-ToyEditor::~ToyEditor()
-{
-    delete play;
-    delete build;
-    delete settings;
-}
+ToyEditor::~ToyEditor() = default;
 
 void ToyEditor::paint (Graphics& g)
 {
@@ -877,10 +798,6 @@ void ToyEditor::paint (Graphics& g)
 void ToyEditor::resized()
 {
     tabs.setBounds (getLocalBounds());
-    const auto area = getLocalBounds().withTrimmedTop (tabs.getTabBarDepth());
-    for (Component* c : std::initializer_list<Component*> { play, build, settings })
-        if (c != nullptr)
-            c->setBounds (area);
     keys->setBounds (getLocalBounds().removeFromBottom (60).reduced (12, 8));
 }
 
@@ -896,10 +813,8 @@ void ToyEditor::focusTab (int index)
             return;
         if (index == 0 && safe->play != nullptr)
             safe->play->instrumentBox.grabKeyboardFocus();
-        else if (index == 1 && safe->build != nullptr)
-            safe->build->grabKeyboardFocus();
-        else if (index == 2 && safe->settings != nullptr)
-            safe->settings->grabKeyboardFocus();
+        else if (auto* c = safe->tabs.getCurrentContentComponent())
+            c->grabKeyboardFocus();
     });
 }
 
