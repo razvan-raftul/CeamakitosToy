@@ -1,5 +1,7 @@
 #include "PluginEditor.h"
 #include "Updater.h"
+#include <algorithm>
+#include <cstring>
 #include "Speech.h"
 
 using namespace juce;
@@ -230,6 +232,58 @@ private:
 
 //==============================================================================
 // Fila "Construiește instrumente"
+//==============================================================================
+// Nota din numele fisierului: "a2", "C#4", "db3", "Do4", "sol#2", "la_3"... (Do4 = C4 = 60)
+static int noteFromName (const String& fileName)
+{
+    auto stem = File::createFileWithoutCheckingPath (fileName).getFileNameWithoutExtension().toLowerCase();
+    auto tokens = StringArray::fromTokens (stem, " _-.()[]", "");
+    tokens.removeEmptyStrings();
+    // si perechi lipite cu spatiu/liniuta: "la 3" -> "la3"
+    for (int i = 0; i + 1 < tokens.size(); ++i)
+        if (tokens[i + 1].containsOnly ("-0123456789") && tokens[i].containsOnly ("abcdefgilmors#"))
+            tokens.add (tokens[i] + tokens[i + 1]);
+
+    static const std::pair<const char*, int> ro[] = { { "do", 0 }, { "re", 2 }, { "mi", 4 }, { "fa", 5 }, { "sol", 7 }, { "la", 9 }, { "si", 11 } };
+    for (int t = tokens.size(); --t >= 0;)   // ultimul token cu nota castiga (de obicei e la final)
+    {
+        const auto tok = tokens[t];
+        int i = 0, pc = -1;
+        for (auto& r : ro)
+            if (tok.startsWith (r.first)) { pc = r.second; i = (int) strlen (r.first); break; }
+        if (pc < 0)
+        {
+            const auto c = tok[0];
+            if (c < 'a' || c > 'g') continue;
+            static const int en[] = { 9, 11, 0, 2, 4, 5, 7 };   // a b c d e f g
+            pc = en[c - 'a']; i = 1;
+        }
+        auto rest = tok.substring (i);
+        if (rest.startsWith ("#") || rest.startsWith ("s")) { ++pc; rest = rest.substring (1); }
+        else if (rest.startsWith ("b") && rest.length() > 1) { --pc; rest = rest.substring (1); }
+        if (rest.isEmpty() || ! rest.containsOnly ("-0123456789") || rest.length() > 2) continue;
+        const int oct = rest.getIntValue();
+        if (oct < -1 || oct > 9) continue;
+        const int note = (oct + 1) * 12 + pc;
+        if (note >= 0 && note <= 127)
+            return note;
+    }
+    return -1;
+}
+
+// cat de tare din nume: pp, p, mp, mf, f, ff (sau soft / loud); -1 daca nu scrie
+static int dynamicFromName (const String& fileName)
+{
+    auto stem = File::createFileWithoutCheckingPath (fileName).getFileNameWithoutExtension().toLowerCase();
+    auto tokens = StringArray::fromTokens (stem, " _-.()[]", "");
+    static const std::pair<const char*, int> dyn[] = { { "ppp", 0 }, { "pp", 1 }, { "p", 2 }, { "soft", 2 }, { "mp", 3 }, { "mf", 4 }, { "f", 5 }, { "loud", 5 }, { "ff", 6 }, { "fff", 7 } };
+    for (auto& tok : tokens)
+        for (auto& d : dyn)
+            if (tok == d.first)
+                return d.second;
+    return -1;
+}
+
 class BuildPanel : public Component, private ChangeListener, private ListBoxModel, private Timer
 {
 public:
@@ -502,15 +556,19 @@ private:
                               });
     }
 
-    void addFiles (const Array<File>& files)
+    void addFiles (const Array<File>& filesIn)
     {
-        if (files.isEmpty())
+        if (filesIn.isEmpty())
             return;
+        auto files = filesIn;
+        std::sort (files.begin(), files.end(), [] (const File& a, const File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
+
         int next = 36;
         for (auto& e : entries)
             next = jmax (next, e.hi + 1);
 
-        int added = 0;
+        struct Added { String file; int note, dyn; };
+        std::vector<Added> withNote, without;
         for (auto f : files)
         {
             if (! f.existsAsFile())
@@ -523,15 +581,61 @@ private:
                 if (! f.copyFileTo (dest))
                     continue;
             }
+            const int n = noteFromName (f.getFileName());
+            (n >= 0 ? withNote : without).push_back ({ dest.getFileName(), n, dynamicFromName (f.getFileName()) });
+        }
+
+        // sunetele cu nota in nume: fiecare pe nota lui; clapele dintre note se impart intre vecini
+        std::vector<int> notes;
+        for (auto& a : withNote) if (std::find (notes.begin(), notes.end(), a.note) == notes.end()) notes.push_back (a.note);
+        std::sort (notes.begin(), notes.end());
+        for (size_t k = 0; k < notes.size(); ++k)
+        {
+            const int n = notes[k];
+            int lo, hi;
+            if (notes.size() == 1) { lo = jmax (0, n - 24); hi = jmin (127, n + 24); }
+            else
+            {
+                lo = k == 0 ? jmax (0, n - (notes[1] - n) / 2) : notes[k - 1] + (n - notes[k - 1]) / 2 + 1;
+                hi = k + 1 == notes.size() ? jmin (127, n + (n - notes[k - 1]) / 2) : n + (notes[k + 1] - n) / 2;
+            }
+            // pe aceeasi nota: straturi dupa cat de tare (p, f...), iar ce are aceeasi tarie se alterneaza (round robin)
+            std::vector<int> dyns;
+            for (auto& a : withNote) if (a.note == n && std::find (dyns.begin(), dyns.end(), a.dyn) == dyns.end()) dyns.push_back (a.dyn);
+            std::sort (dyns.begin(), dyns.end());
+            for (auto& a : withNote)
+            {
+                if (a.note != n) continue;
+                ToyProcessor::MapLine l;
+                l.lo = lo; l.hi = hi; l.root = n; l.file = a.file;
+                const int layers = (int) dyns.size();
+                if (layers > 1)
+                {
+                    const int idx = (int) (std::find (dyns.begin(), dyns.end(), a.dyn) - dyns.begin());
+                    l.vlo = idx * 128 / layers;
+                    l.vhi = (idx + 1) * 128 / layers - 1;
+                }
+                entries.push_back (l);
+            }
+        }
+        // restul (fara nota in nume, ca la tobe): cate unul pe clapa urmatoare
+        for (auto& a : without)
+        {
             ToyProcessor::MapLine l;
             l.lo = l.hi = l.root = jmin (127, next++);
-            l.file = dest.getFileName();
+            l.file = a.file;
             entries.push_back (l);
-            ++added;
         }
+
+        const int added = (int) (withNote.size() + without.size());
         save ((int) entries.size() - 1);
-        announce (ro ("Am adăugat ") + String (added) + (added == 1 ? ro (" sunet") : ro (" sunete"))
-                  + ro (". Fiecare e pe clapa următoare, le poți muta din listă."));
+        String msg = ro ("Am adăugat ") + String (added) + (added == 1 ? ro (" sunet") : ro (" sunete")) + ". ";
+        if (! withNote.empty())
+            msg << String ((int) withNote.size()) << ro (" le-am pus pe nota din nume, de la ") << ToyProcessor::noteName (notes.front())
+                << ro (" până la ") << ToyProcessor::noteName (notes.back()) << ". ";
+        if (! without.empty())
+            msg << String ((int) without.size()) << ro (" nu aveau nota în nume și le-am pus pe clapele următoare.");
+        announce (msg);
         list.grabKeyboardFocus();
     }
 
