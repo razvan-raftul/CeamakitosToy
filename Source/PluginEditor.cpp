@@ -750,7 +750,8 @@ void ToyTabs::moveTab (int delta, bool absolute)
     const int n = getNumTabs();
     if (n == 0)
         return;
-    const int target = absolute ? jlimit (0, n - 1, delta) : ((getCurrentTabIndex() + delta) % n + n) % n;
+    // la capete se opreste, ca un TabControl din Windows (nu sare de la ultima la prima)
+    const int target = absolute ? jlimit (0, n - 1, delta) : jlimit (0, n - 1, getCurrentTabIndex() + delta);
     setCurrentTabIndex (target);
     updateTabFocus();
     if (auto* b = getTabbedButtonBar().getTabButton (target))
