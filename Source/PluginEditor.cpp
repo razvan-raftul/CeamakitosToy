@@ -140,7 +140,7 @@ public:
         addAndMakeVisible (sensSlider);
         sensAtt = std::make_unique<SA> (proc.apvts, "sensibilitate", sensSlider);
         sensSlider.setWantsKeyboardFocus (true);
-        sensSlider.textFromValueFunction = [] (double v) { return String (roundToInt (v * 100.0)) + " la suta"; };
+        sensSlider.textFromValueFunction = [] (double v) { return String (roundToInt (v * 100.0)) + ro (" la sută"); };
         sensSlider.updateText();
 
         setupLabel (releaseLabel, "La ridicarea clapei", releaseBox);
