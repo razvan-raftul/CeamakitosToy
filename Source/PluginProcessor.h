@@ -75,6 +75,9 @@ public:
     static std::vector<MapLine> readMap (const juce::File& dir);
     static bool writeMap (const juce::File& dir, const std::vector<MapLine>& lines);
     static juce::String noteName (int note);
+    // cum se numeste Do central (nota 60): 3, 4 sau 5 (C3, C4, C5); salvat in %APPDATA%\Ceamakito's toy\octava.txt
+    static int middleCOctave();
+    static void setMiddleCOctave (int o);
     juce::File instrumentFolder (int index) const;
     void reloadCurrent() { requestLoad(); }
     void rescanFolders() { rescan(); }

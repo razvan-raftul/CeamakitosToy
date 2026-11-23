@@ -347,7 +347,32 @@ juce::String ToyProcessor::noteName (int note)
 {
     static const char* names[] = { "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si" };
     note = jlimit (0, 127, note);
-    return String (names[note % 12]) + String (note / 12 - 1);
+    return String (names[note % 12]) + String (note / 12 - (5 - middleCOctave()));
+}
+
+static File octaveFile()
+{
+    return File::getSpecialLocation (File::userApplicationDataDirectory).getChildFile ("Ceamakito's toy").getChildFile ("octava.txt");
+}
+
+static std::atomic<int> cachedOctave { 0 };
+
+int ToyProcessor::middleCOctave()
+{
+    if (cachedOctave.load() == 0)
+    {
+        const int o = octaveFile().loadFileAsString().trim().getIntValue();
+        cachedOctave = (o >= 3 && o <= 5) ? o : 4;
+    }
+    return cachedOctave.load();
+}
+
+void ToyProcessor::setMiddleCOctave (int o)
+{
+    o = jlimit (3, 5, o);
+    cachedOctave = o;
+    octaveFile().getParentDirectory().createDirectory();
+    octaveFile().replaceWithText (String (o));
 }
 
 juce::File ToyProcessor::instrumentFolder (int index) const

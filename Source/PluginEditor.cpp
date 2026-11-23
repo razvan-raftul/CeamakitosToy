@@ -211,6 +211,16 @@ public:
         addChildComponent (updateButton);
         updateButton.setVisible (standalone);
 
+        setupLabel (octLabel, ro ("Cum se numește Do central (ca în REAPER)"), octBox);
+        octBox.addItemList ({ ro ("Do central e C3"), ro ("Do central e C4"), ro ("Do central e C5") }, 1);
+        octBox.setSelectedItemIndex (ToyProcessor::middleCOctave() - 3, dontSendNotification);
+        octBox.onChange = [this]
+        {
+            ToyProcessor::setMiddleCOctave (octBox.getSelectedItemIndex() + 3);
+            announce (octBox.getText() + ro (". Se aplică sunetelor pe care le adaugi de acum. Numele din liste se schimbă după ce redeschizi."));
+        };
+        addAndMakeVisible (octBox);
+
         dm = standalone ? appDevices() : nullptr;
         for (auto* b : { &driverBox, &deviceBox, &bufferBox })
             addChildComponent (*b);
@@ -235,7 +245,7 @@ public:
 
         int order = 1;
         for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &volumeSlider, &sensSlider,
-                                                               &releaseBox, &driverBox, &deviceBox, &bufferBox, &versionBox, &updateButton })
+                                                               &releaseBox, &octBox, &driverBox, &deviceBox, &bufferBox, &versionBox, &updateButton })
             c->setExplicitFocusOrder (order++);
 
         proc.changes.addChangeListener (this);
@@ -255,6 +265,7 @@ public:
         volumeSlider.setBounds (row (26));
         sensSlider.setBounds (row (26));
         releaseBox.setBounds (row (28));
+        octBox.setBounds (row (26));
         if (dm != nullptr)
             for (auto* b : { &driverBox, &deviceBox, &bufferBox })
                 b->setBounds (row (26));
@@ -394,6 +405,8 @@ private:
 
     StringArray driverTypes;
     ComboBox* pendingBox = nullptr;
+    ComboBox octBox;
+    Label octLabel;
     AudioDeviceManager* dm = nullptr;
     bool filling = false;
     ComboBox driverBox, deviceBox, bufferBox;
@@ -448,8 +461,8 @@ static int noteFromName (const String& fileName)
         else if (rest.startsWith ("b") && rest.length() > 1) { --pc; rest = rest.substring (1); }
         if (rest.isEmpty() || ! rest.containsOnly ("-0123456789") || rest.length() > 2) continue;
         const int oct = rest.getIntValue();
-        if (oct < -1 || oct > 9) continue;
-        const int note = (oct + 1) * 12 + pc;
+        if (oct < -2 || oct > 10) continue;
+        const int note = (oct + 5 - ToyProcessor::middleCOctave()) * 12 + pc;
         if (note >= 0 && note <= 127)
             return note;
     }
@@ -553,6 +566,13 @@ public:
         removeButton.onClick = [this] { removeSound(); };
         addAndMakeVisible (removeButton);
 
+        downButton.setButtonText (ro ("Mută tot instrumentul o octavă mai jos"));
+        downButton.onClick = [this] { shiftAll (-12); };
+        addAndMakeVisible (downButton);
+        upButton.setButtonText (ro ("Mută tot instrumentul o octavă mai sus"));
+        upButton.onClick = [this] { shiftAll (12); };
+        addAndMakeVisible (upButton);
+
         StringArray notes;
         for (int i = 0; i < 128; ++i)
             notes.add (ToyProcessor::noteName (i));
@@ -574,7 +594,7 @@ public:
 
         int order = 1;
         for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &fillBox, &list, &listenButton,
-                                                               &learnButton, &removeButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox, &stopBox })
+                                                               &learnButton, &removeButton, &downButton, &upButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox, &stopBox })
             c->setExplicitFocusOrder (order++);
 
         proc.changes.addChangeListener (this);
@@ -606,6 +626,10 @@ public:
         listenButton.setBounds (b.removeFromLeft (w).reduced (2, 0));
         learnButton.setBounds (b.removeFromLeft (w).reduced (2, 0));
         removeButton.setBounds (b.reduced (2, 0));
+        auto b2 = r.removeFromTop (28);
+        r.removeFromTop (6);
+        downButton.setBounds (b2.removeFromLeft (b2.getWidth() / 2).reduced (2, 0));
+        upButton.setBounds (b2.reduced (2, 0));
         for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox, &stopBox })
             c->setBounds (row (24));
     }
@@ -943,6 +967,23 @@ private:
         announce (ro ("Am scos ") + name + ro (" din instrument. Fișierul a rămas în folder."));
     }
 
+    void shiftAll (int d)
+    {
+        if (entries.empty()) { announce (ro ("Instrumentul nu are sunete.")); return; }
+        for (auto& e : entries)
+            if (e.lo + d < 0 || e.hi + d > 127)
+            {
+                announce (ro ("Nu se mai poate muta, ar ieși din clape."));
+                return;
+            }
+        for (auto& e : entries) { e.lo += d; e.hi += d; e.root += d; }
+        const int r = jmax (0, list.getSelectedRow());
+        save (r);
+        showFields();
+        announce (ro (d < 0 ? "Am mutat tot instrumentul o octavă mai jos." : "Am mutat tot instrumentul o octavă mai sus."));
+    }
+
+    TextButton downButton, upButton;
     ToyProcessor& proc;
     Label newLabel, instLabel, loLabel, hiLabel, rootLabel, grpLabel, vloLabel, vhiLabel, stopLabel;
     TextEditor newName;
