@@ -18,10 +18,20 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
-          Invoke-WebRequest -Uri "https://www.steinberg.net/asiosdk" -OutFile asio.zip
-          Expand-Archive asio.zip -DestinationPath asiotmp
-          $c = Get-ChildItem asiotmp -Recurse -Filter iasiodrv.h | Select-Object -First 1
-          if ($c) { Move-Item $c.Directory.Parent.FullName asiosdk; Write-Output "ASIO SDK gasit" } else { Write-Output "::warning::ASIO SDK negasit" }
+          $urls = @(
+            "https://download.steinberg.net/sdk_downloads/asiosdk_2.3.3_2019-06-14.zip",
+            "https://www.steinberg.net/asiosdk",
+            "https://download.steinberg.net/sdk_downloads/ASIO-SDK_2.3.3_2019-06-14.zip"
+          )
+          foreach ($u in $urls) {
+            try {
+              Invoke-WebRequest -Uri $u -OutFile asio.zip -UserAgent "Mozilla/5.0" -MaximumRedirection 10
+              Expand-Archive asio.zip -DestinationPath asiotmp -Force
+              $c = Get-ChildItem asiotmp -Recurse -Filter iasiodrv.h | Select-Object -First 1
+              if ($c) { Move-Item $c.Directory.Parent.FullName asiosdk; Write-Output "::warning::ASIO SDK gasit la $u"; break }
+              Write-Output "::warning::fara iasiodrv.h in $u"
+            } catch { Write-Output ("::warning::ASIO $u : " + $_.Exception.Message) }
+          }
 
       - name: Configure
         run: cmake -B build -A x64 "-DTOY_VERSION=0.1.${{ github.run_number }}"
