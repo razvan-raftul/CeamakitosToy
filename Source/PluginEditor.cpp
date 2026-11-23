@@ -967,7 +967,7 @@ private:
 };
 
 //==============================================================================
-// Claviatura cu tastele calculatorului, pornita cu Control B (ca in REAPER)
+// Claviatura cu tastele calculatorului, pornita cu Alt B
 class KeyboardMode : public Component
 {
 public:
@@ -975,7 +975,7 @@ public:
     {
         setWantsKeyboardFocus (true);
         setTitle (ro ("Claviatură"));
-        setDescription (ro ("Cânți cu tastele Z S X D C pentru octava de jos și Q 2 W 3 E pentru cea de sus. Săgeată sus și jos te transpun cu câte un semiton, săgeată stânga și dreapta schimbă octava. Control B sau Escape o închide."));
+        setDescription (ro ("Cânți cu tastele Z S X D C pentru octava de jos și Q 2 W 3 E pentru cea de sus. Săgeată sus și jos te transpun cu câte un semiton, săgeată stânga și dreapta schimbă octava. Alt B sau Escape o închide."));
     }
 
     void paint (Graphics& g) override
@@ -1241,7 +1241,7 @@ bool ToyEditor::keyPressed (const KeyPress& k)
             return true;
         }
     }
-    if (m.isCtrlDown() && ! m.isAltDown() && (c == 'B' || c == 'b'))
+    if (m.isAltDown() && ! m.isCtrlDown() && (c == 'B' || c == 'b'))
     {
         toggleKeyboard();
         return true;

@@ -3,7 +3,7 @@ local cale = debug.getinfo(1, "S").source:match("^@(.*[\\/])")
 local S = dofile(cale .. "comun.lua")
 
 local tr, fx = S.gaseste()
-if not tr then S.spune("Pune întâi pluginul Ceamakito's toy pe o pistă."); return end
+if not tr then S.lipsa(); return end
 
 local start = reaper.GetResourcePath() .. S.SEP .. "Data" .. S.SEP .. "Ceamakito's toy" .. S.SEP .. "Instrumente"
 local f = io.open(S.fisier_radacina(), "r")

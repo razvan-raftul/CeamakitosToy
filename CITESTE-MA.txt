@@ -22,11 +22,11 @@ Tot ce schimbi se salvează singur.
 Fila Setări: Alege folderul cu instrumente și căsuța cu folderul ales, volumul general, cât contează cât de tare apeși clapa, ce se întâmplă la ridicarea clapei și versiunea. În aplicația de pe desktop mai e butonul Caută actualizări acum.
 
 Scurtături
-Control B: pornește sau oprește claviatura. Cânți cu Z S X D C V pentru octava de jos și cu Q 2 W 3 E R pentru cea de sus, ca în REAPER. Săgeată sus și săgeată jos te transpun cu câte un semiton, până la 12 în sus sau în jos. Săgeată stânga și săgeată dreapta schimbă octava. Escape o oprește.
+Alt B: pornește sau oprește claviatura. Cânți cu Z S X D C V pentru octava de jos și cu Q 2 W 3 E R pentru cea de sus, ca în REAPER. Săgeată sus și săgeată jos te transpun cu câte un semiton, până la 12 în sus sau în jos. Săgeată stânga și săgeată dreapta schimbă octava. Escape o oprește.
 Alt 1: instrumentul anterior.
 Alt 2: instrumentul următor.
 Alt 3: te duce în fila Setări și deschide alegerea folderului cu instrumente.
-În REAPER merg și în claviatura de la Control B.
+În REAPER merg și în claviatura de la Alt B.
 
 Cum arată un instrument
 Un instrument e un folder cu WAV-uri. Numele folderului e numele instrumentului.
