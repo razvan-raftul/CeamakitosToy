@@ -11,7 +11,8 @@ end
 local function fx_pe(tr)
   for i = 0, reaper.TrackFX_GetCount(tr) - 1 do
     local _, n = reaper.TrackFX_GetFXName(tr, i, "")
-    if n:find(NUME, 1, true) and not n:find("^JS") then return i end
+    local l = n:lower():gsub("[^%w]", "")
+    if l:find("ceamakito", 1, true) and not n:find("^JS") then return i end
   end
 end
 
