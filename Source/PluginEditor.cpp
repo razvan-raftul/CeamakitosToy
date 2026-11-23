@@ -425,6 +425,19 @@ public:
     }
 };
 
+// "opreste" sau "stop" in nume: sunetul tine doar cat tii clapa; "continua": se aude pana la capat
+static int stopFromName (const String& fileName)
+{
+    auto stem = File::createFileWithoutCheckingPath (fileName).getFileNameWithoutExtension().toLowerCase();
+    auto tokens = StringArray::fromTokens (stem, " _-.()[]", "");
+    for (auto& tok : tokens)
+    {
+        if (tok == "opreste" || tok == ro ("oprește") || tok == ro ("opreşte") || tok == "stop") return 1;
+        if (tok == "continua" || tok == ro ("continuă")) return 2;
+    }
+    return 0;
+}
+
 class BuildPanel : public Component, private ChangeListener, private ListBoxModel, private Timer
 {
 public:
@@ -790,7 +803,7 @@ private:
             {
                 if (a.note != n) continue;
                 ToyProcessor::MapLine l;
-                l.lo = lo; l.hi = hi; l.root = n; l.file = a.file;
+                l.lo = lo; l.hi = hi; l.root = n; l.file = a.file; l.stop = stopFromName (a.file);
                 const int layers = (int) dyns.size();
                 if (layers > 1)
                 {
@@ -807,6 +820,7 @@ private:
             ToyProcessor::MapLine l;
             l.lo = l.hi = l.root = jmin (127, next++);
             l.file = a.file;
+            l.stop = stopFromName (a.file);
             entries.push_back (l);
         }
 
