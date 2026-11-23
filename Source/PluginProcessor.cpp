@@ -384,6 +384,7 @@ std::vector<ToyProcessor::MapLine> ToyProcessor::readMap (const File& dir)
             l.vlo  = nums.size() > 3 ? nums[3].getIntValue() : 0;
             l.vhi  = nums.size() > 4 ? nums[4].getIntValue() : 127;
             l.grp  = nums.size() > 5 ? nums[5].getIntValue() : 0;
+            l.stop = nums.size() > 6 ? jlimit (0, 2, nums[6].getIntValue()) : 0;
             l.file = row.substring (bar + 1).trim().unquoted();
             if (l.file.isNotEmpty())
                 lines.push_back (l);
@@ -411,9 +412,9 @@ std::vector<ToyProcessor::MapLine> ToyProcessor::readMap (const File& dir)
 bool ToyProcessor::writeMap (const File& dir, const std::vector<MapLine>& lines)
 {
     String t;
-    t << "# Ceamakito's toy: clapa de jos, clapa de sus, clapa pe care suna neschimbat, cat de tare minim, cat de tare maxim, grupa | fisier\n";
+    t << "# Ceamakito's toy: clapa de jos, clapa de sus, clapa pe care suna neschimbat, cat de tare minim, cat de tare maxim, grupa, la ridicarea clapei (0 ca in Setari, 1 se opreste, 2 continua) | fisier\n";
     for (auto& l : lines)
-        t << l.lo << " " << l.hi << " " << l.root << " " << l.vlo << " " << l.vhi << " " << l.grp << " | " << l.file << "\n";
+        t << l.lo << " " << l.hi << " " << l.root << " " << l.vlo << " " << l.vhi << " " << l.grp << " " << l.stop << " | " << l.file << "\n";
     return dir.getChildFile ("harta.txt").replaceWithText (t);
 }
 
@@ -443,6 +444,7 @@ std::shared_ptr<Instrument> ToyProcessor::build (const File& dir)
         z.vlo   = jlimit (0, 127, l.vlo);
         z.vhi   = jlimit (z.vlo, 127, l.vhi);
         z.group = jmax (0, l.grp);
+        z.stop  = l.stop;
         z.sampleRate = reader->sampleRate > 0 ? reader->sampleRate : 44100.0;
         z.data.setSize (ch, len + 1);
         z.data.clear();
@@ -497,6 +499,7 @@ void ToyProcessor::noteOn (int note, int velocity)
     slot->zone   = zi;
     slot->note   = note;
     slot->group  = z.group;
+    slot->stop   = z.stop;
     slot->pos    = 0.0;
     slot->step   = z.sampleRate / hostRate * std::pow (2.0, (note - z.root) / 12.0);
     slot->gain   = (1.0f - s) + s * ((float) velocity / 127.0f);
@@ -506,10 +509,9 @@ void ToyProcessor::noteOn (int note, int velocity)
 
 void ToyProcessor::noteOff (int note)
 {
-    if (releaseParam->load() < 0.5f)
-        return;
+    const bool general = releaseParam->load() >= 0.5f;
     for (auto& v : voices)
-        if (v.active && v.note == note)
+        if (v.active && v.note == note && (v.stop == 1 || (v.stop == 0 && general)))
             v.fading = true;
 }
 

@@ -11,7 +11,7 @@ inline juce::String ro (const char* s) { return juce::String::fromUTF8 (s); }
 
 struct Zone
 {
-    int lo = 0, hi = 127, root = 60, vlo = 0, vhi = 127, group = 0;
+    int lo = 0, hi = 127, root = 60, vlo = 0, vhi = 127, group = 0, stop = 0;
     double sampleRate = 44100.0;
     juce::AudioBuffer<float> data;
 };
@@ -71,7 +71,7 @@ public:
     juce::ChangeBroadcaster changes;
 
     // pentru fereastra de construit instrumente
-    struct MapLine { int lo = 36, hi = 36, root = 36, vlo = 0, vhi = 127, grp = 0; juce::String file; };
+    struct MapLine { int lo = 36, hi = 36, root = 36, vlo = 0, vhi = 127, grp = 0, stop = 0; juce::String file; };  // stop: 0 ca in Setari, 1 se opreste, 2 continua
     static std::vector<MapLine> readMap (const juce::File& dir);
     static bool writeMap (const juce::File& dir, const std::vector<MapLine>& lines);
     static juce::String noteName (int note);
@@ -118,7 +118,7 @@ private:
     struct Voice
     {
         bool active = false, fading = false;
-        int zone = 0, note = 0, group = 0;
+        int zone = 0, note = 0, group = 0, stop = 0;
         double pos = 0.0, step = 1.0;
         float gain = 1.0f, level = 1.0f;
         juce::uint32 age = 0;

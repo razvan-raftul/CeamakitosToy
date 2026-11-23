@@ -498,12 +498,14 @@ public:
         setupCombo (hiBox, hiLabel, "Clapa de sus", notes);
         setupCombo (rootBox, rootLabel, ro ("Clapa pe care sună neschimbat"), notes);
         setupCombo (grpBox, grpLabel, ro ("Grupa (se taie între ele)"), groups);
+        setupCombo (stopBox, stopLabel, ro ("La ridicarea clapei, pentru acest sunet"),
+                    { ro ("Ca în Setări"), ro ("Sunetul se oprește"), ro ("Sunetul continuă până la capăt") });
         setupCombo (vloBox, vloLabel, ro ("Cel mai încet la care sună"), levels);
         setupCombo (vhiBox, vhiLabel, ro ("Cel mai tare la care sună"), levels);
 
         int order = 1;
         for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &fillBox, &list, &listenButton,
-                                                               &learnButton, &removeButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
+                                                               &learnButton, &removeButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox, &stopBox })
             c->setExplicitFocusOrder (order++);
 
         proc.changes.addChangeListener (this);
@@ -535,7 +537,7 @@ public:
         listenButton.setBounds (b.removeFromLeft (w).reduced (2, 0));
         learnButton.setBounds (b.removeFromLeft (w).reduced (2, 0));
         removeButton.setBounds (b.reduced (2, 0));
-        for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
+        for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox, &stopBox })
             c->setBounds (row (24));
     }
 
@@ -566,6 +568,8 @@ private:
             s << ", grupa " << e.grp;
         if (e.vlo > 0 || e.vhi < 127)
             s << ro (", când apeși între ") << e.vlo << " și " << e.vhi;
+        if (e.stop == 1) s << ro (", se oprește când ridici clapa");
+        if (e.stop == 2) s << ro (", continuă până la capăt");
         return s;
     }
 
@@ -647,7 +651,7 @@ private:
     {
         const int r = list.getSelectedRow();
         const bool ok = isPositiveAndBelow (r, (int) entries.size());
-        for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
+        for (auto* c : { &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox, &stopBox })
             c->setEnabled (ok);
         listenButton.setEnabled (ok);
         learnButton.setEnabled (ok);
@@ -661,6 +665,7 @@ private:
         grpBox.setSelectedItemIndex (jlimit (0, 16, e.grp), dontSendNotification);
         vloBox.setSelectedItemIndex (e.vlo, dontSendNotification);
         vhiBox.setSelectedItemIndex (e.vhi, dontSendNotification);
+        stopBox.setSelectedItemIndex (jlimit (0, 2, e.stop), dontSendNotification);
     }
 
     void fieldsChanged()
@@ -675,6 +680,7 @@ private:
         e.grp  = jmax (0, grpBox.getSelectedItemIndex());
         e.vlo  = jmax (0, vloBox.getSelectedItemIndex());
         e.vhi  = jmax (e.vlo, vhiBox.getSelectedItemIndex());
+        e.stop = jmax (0, stopBox.getSelectedItemIndex());
         save (r);
         showFields();
     }
@@ -868,10 +874,10 @@ private:
     }
 
     ToyProcessor& proc;
-    Label newLabel, instLabel, loLabel, hiLabel, rootLabel, grpLabel, vloLabel, vhiLabel;
+    Label newLabel, instLabel, loLabel, hiLabel, rootLabel, grpLabel, vloLabel, vhiLabel, stopLabel;
     TextEditor newName;
     TextButton createButton, addButton, listenButton, learnButton, removeButton;
-    ComboBox instBox, loBox, hiBox, rootBox, grpBox, vloBox, vhiBox;
+    ComboBox instBox, loBox, hiBox, rootBox, grpBox, vloBox, vhiBox, stopBox;
     SpokenList list;
     ComboBox fillBox;
     Label fillLabel;
