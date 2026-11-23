@@ -24,32 +24,36 @@ static File audioMark()
     return File::getSpecialLocation (File::userApplicationDataDirectory).getChildFile ("Ceamakito's toy").getChildFile ("sunet.txt");
 }
 
-// prima pornire: ASIO daca exista, altfel Windows Audio cu intarziere mica
-static void firstRunLowLatency (AudioDeviceManager& dm)
+// drivere ASIO generale, instalate si fara placa de sunet (iau sunetul Windows-ului si NVDA amuteste)
+static bool isGenericAsio (const String& name)
 {
-    if (audioMark().existsAsFile())
-        return;
-    audioMark().getParentDirectory().createDirectory();
-    audioMark().replaceWithText ("1");
+    auto n = name.toLowerCase();
+    for (auto* g : { "asio4all", "realtek", "fl studio", "generic low latency", "voicemeeter", "built-in", "magix", "steinberg generic" })
+        if (n.contains (g)) return true;
+    return false;
+}
+
+static StringArray realAsioDevices (AudioDeviceManager& dm)
+{
+    StringArray out;
     for (auto* t : dm.getAvailableDeviceTypes())
         if (t->getTypeName() == "ASIO")
         {
             t->scanForDevices();
-            if (t->getDeviceNames().size() > 0) { dm.setCurrentAudioDeviceType ("ASIO", true); return; }
+            for (auto& d : t->getDeviceNames())
+                if (! isGenericAsio (d)) out.add (d);
         }
-    dm.setCurrentAudioDeviceType ("Windows Audio (Low Latency Mode)", true);
-    if (auto* d = dm.getCurrentAudioDevice())
-    {
-        int best = 0;
-        for (auto b : d->getAvailableBufferSizes())
-            if (b >= 128 && (best == 0 || b < best)) best = b;
-        if (best > 0)
-        {
-            auto setup = dm.getAudioDeviceSetup();
-            setup.bufferSize = best;
-            dm.setAudioDeviceSetup (setup, true);
-        }
-    }
+    return out;
+}
+
+// implicit: sunetul normal de Windows (o data, si pentru cine avea deja ASIO pus de versiunea veche)
+static void firstRunNormal (AudioDeviceManager& dm)
+{
+    if (audioMark().loadFileAsString().trim() == "2")
+        return;
+    audioMark().getParentDirectory().createDirectory();
+    audioMark().replaceWithText ("2");
+    dm.setCurrentAudioDeviceType ("Windows Audio", true);
 }
 
 static void announce (const String& s) { speak (s); }
@@ -157,7 +161,7 @@ private:
 
 //==============================================================================
 // Fila "Setări" (Control 3, ultima)
-class SettingsPanel : public Component, private ChangeListener
+class SettingsPanel : public Component, private ChangeListener, private Timer
 {
 public:
     SettingsPanel (ToyProcessor& p, std::function<void()> chosen) : proc (p), onFolderChosen (std::move (chosen))
@@ -216,27 +220,15 @@ public:
             setupLabel (bufferLabel, ro ("Întârzierea"), bufferBox);
             for (auto* b : { &driverBox, &deviceBox, &bufferBox })
                 b->setVisible (true);
-            driverBox.onChange = [this] { if (! filling) { dm->setCurrentAudioDeviceType (driverBox.getText(), true); fillAudio(); } };
-            deviceBox.onChange = [this]
-            {
-                if (filling) return;
-                auto st = dm->getAudioDeviceSetup();
-                st.outputDeviceName = deviceBox.getText();
-                st.inputDeviceName = {};
-                dm->setAudioDeviceSetup (st, true);
-                fillAudio();
-            };
-            bufferBox.onChange = [this]
-            {
-                if (filling) return;
-                const int i = bufferBox.getSelectedItemIndex();
-                if (! isPositiveAndBelow (i, buffers.size())) return;
-                auto st = dm->getAudioDeviceSetup();
-                st.bufferSize = buffers[i];
-                dm->setAudioDeviceSetup (st, true);
-                fillAudio();
-            };
-            firstRunLowLatency (*dm);
+            for (auto* box : { &driverBox, &deviceBox, &bufferBox })
+                box->onChange = [this, box]
+                {
+                    if (filling) return;
+                    announce (box->getText());
+                    pendingBox = box;
+                    startTimer (900);
+                };
+            firstRunNormal (*dm);
             fillAudio();
         }
 
@@ -302,6 +294,63 @@ private:
             folderBox.setText (folder, dontSendNotification);
     }
 
+    // nume pe intelesul tau
+    static String driverLabelFor (const String& type)
+    {
+        if (type == "Windows Audio") return ro ("Windows normal");
+        if (type == "Windows Audio (Low Latency Mode)") return ro ("Windows cu întârziere mică");
+        if (type == "ASIO") return "ASIO";
+        return type;
+    }
+
+    // se aplica abia dupa ce te opresti din sageti (schimbarea placii blocheaza putin)
+    void timerCallback() override
+    {
+        stopTimer();
+        auto* box = pendingBox;
+        pendingBox = nullptr;
+        if (box == &driverBox)
+        {
+            const int i = driverBox.getSelectedItemIndex();
+            if (! isPositiveAndBelow (i, driverTypes.size())) return;
+            dm->setCurrentAudioDeviceType (driverTypes[i], true);
+            if (driverTypes[i] == "ASIO")
+            {
+                auto real = realAsioDevices (*dm);
+                if (real.size() > 0)
+                {
+                    auto st = dm->getAudioDeviceSetup();
+                    st.outputDeviceName = st.inputDeviceName = real[0];
+                    dm->setAudioDeviceSetup (st, true);
+                }
+            }
+        }
+        else if (box == &deviceBox)
+        {
+            auto st = dm->getAudioDeviceSetup();
+            st.outputDeviceName = deviceBox.getText();
+            st.inputDeviceName = dm->getCurrentAudioDeviceType() == "ASIO" ? deviceBox.getText() : String();
+            dm->setAudioDeviceSetup (st, true);
+        }
+        else if (box == &bufferBox)
+        {
+            const int i = bufferBox.getSelectedItemIndex();
+            if (! isPositiveAndBelow (i, buffers.size())) return;
+            auto st = dm->getAudioDeviceSetup();
+            st.bufferSize = buffers[i];
+            dm->setAudioDeviceSetup (st, true);
+        }
+        else return;
+
+        // daca n-a pornit nimic, inapoi la sunetul normal, ca sa nu ramai fara sunet
+        if (dm->getCurrentAudioDevice() == nullptr)
+        {
+            dm->setCurrentAudioDeviceType ("Windows Audio", true);
+            announce (ro ("Nu a mers, am pus înapoi Windows normal."));
+        }
+        fillAudio();
+    }
+
     void fillAudio()
     {
         filling = true;
@@ -309,24 +358,28 @@ private:
         deviceBox.clear (dontSendNotification);
         bufferBox.clear (dontSendNotification);
         buffers.clear();
+        driverTypes.clear();
         const auto cur = dm->getCurrentAudioDeviceType();
-        int id = 1;
+        const auto real = realAsioDevices (*dm);
+        StringArray wanted { "Windows Audio", "Windows Audio (Low Latency Mode)" };
+        if (real.size() > 0 || cur == "ASIO") wanted.add ("ASIO");
         for (auto* t : dm->getAvailableDeviceTypes())
-        {
-            driverBox.addItem (t->getTypeName(), id);
-            if (t->getTypeName() == cur) driverBox.setSelectedId (id, dontSendNotification);
-            ++id;
-        }
+            if (wanted.contains (t->getTypeName()))
+            {
+                driverTypes.add (t->getTypeName());
+                driverBox.addItem (driverLabelFor (t->getTypeName()), driverTypes.size());
+                if (t->getTypeName() == cur) driverBox.setSelectedId (driverTypes.size(), dontSendNotification);
+            }
         if (auto* t = dm->getCurrentDeviceTypeObject())
         {
-            t->scanForDevices();
-            deviceBox.addItemList (t->getDeviceNames (false), 1);
+            if (cur == "ASIO") deviceBox.addItemList (real, 1);
+            else { t->scanForDevices(); deviceBox.addItemList (t->getDeviceNames (false), 1); }
         }
         if (auto* d = dm->getCurrentAudioDevice())
         {
             deviceBox.setText (d->getName(), dontSendNotification);
             const double rate = d->getCurrentSampleRate() > 0 ? d->getCurrentSampleRate() : 44100.0;
-            id = 1;
+            int id = 1;
             for (auto b : d->getAvailableBufferSizes())
             {
                 buffers.add (b);
@@ -338,6 +391,8 @@ private:
         filling = false;
     }
 
+    StringArray driverTypes;
+    ComboBox* pendingBox = nullptr;
     AudioDeviceManager* dm = nullptr;
     bool filling = false;
     ComboBox driverBox, deviceBox, bufferBox;
