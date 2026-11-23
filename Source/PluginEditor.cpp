@@ -3,8 +3,54 @@
 #include <algorithm>
 #include <cstring>
 #include "Speech.h"
+#if JucePlugin_Build_Standalone
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
 
 using namespace juce;
+
+// placa de sunet a aplicatiei (doar in aplicatie, nu in REAPER)
+static AudioDeviceManager* appDevices()
+{
+   #if JucePlugin_Build_Standalone
+    if (auto* h = StandalonePluginHolder::getInstance())
+        return &h->deviceManager;
+   #endif
+    return nullptr;
+}
+
+static File audioMark()
+{
+    return File::getSpecialLocation (File::userApplicationDataDirectory).getChildFile ("Ceamakito's toy").getChildFile ("sunet.txt");
+}
+
+// prima pornire: ASIO daca exista, altfel Windows Audio cu intarziere mica
+static void firstRunLowLatency (AudioDeviceManager& dm)
+{
+    if (audioMark().existsAsFile())
+        return;
+    audioMark().getParentDirectory().createDirectory();
+    audioMark().replaceWithText ("1");
+    for (auto* t : dm.getAvailableDeviceTypes())
+        if (t->getTypeName() == "ASIO")
+        {
+            t->scanForDevices();
+            if (t->getDeviceNames().size() > 0) { dm.setCurrentAudioDeviceType ("ASIO", true); return; }
+        }
+    dm.setCurrentAudioDeviceType ("Windows Audio (Low Latency Mode)", true);
+    if (auto* d = dm.getCurrentAudioDevice())
+    {
+        int best = 0;
+        for (auto b : d->getAvailableBufferSizes())
+            if (b >= 128 && (best == 0 || b < best)) best = b;
+        if (best > 0)
+        {
+            auto setup = dm.getAudioDeviceSetup();
+            setup.bufferSize = best;
+            dm.setAudioDeviceSetup (setup, true);
+        }
+    }
+}
 
 static void announce (const String& s) { speak (s); }
 
@@ -160,9 +206,43 @@ public:
         addChildComponent (updateButton);
         updateButton.setVisible (standalone);
 
+        dm = standalone ? appDevices() : nullptr;
+        for (auto* b : { &driverBox, &deviceBox, &bufferBox })
+            addChildComponent (*b);
+        if (dm != nullptr)
+        {
+            setupLabel (driverLabel, "Driverul de sunet", driverBox);
+            setupLabel (deviceLabel, ro ("Placa de sunet"), deviceBox);
+            setupLabel (bufferLabel, ro ("Întârzierea"), bufferBox);
+            for (auto* b : { &driverBox, &deviceBox, &bufferBox })
+                b->setVisible (true);
+            driverBox.onChange = [this] { if (! filling) { dm->setCurrentAudioDeviceType (driverBox.getText(), true); fillAudio(); } };
+            deviceBox.onChange = [this]
+            {
+                if (filling) return;
+                auto st = dm->getAudioDeviceSetup();
+                st.outputDeviceName = deviceBox.getText();
+                st.inputDeviceName = {};
+                dm->setAudioDeviceSetup (st, true);
+                fillAudio();
+            };
+            bufferBox.onChange = [this]
+            {
+                if (filling) return;
+                const int i = bufferBox.getSelectedItemIndex();
+                if (! isPositiveAndBelow (i, buffers.size())) return;
+                auto st = dm->getAudioDeviceSetup();
+                st.bufferSize = buffers[i];
+                dm->setAudioDeviceSetup (st, true);
+                fillAudio();
+            };
+            firstRunLowLatency (*dm);
+            fillAudio();
+        }
+
         int order = 1;
         for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &volumeSlider, &sensSlider,
-                                                               &releaseBox, &versionBox, &updateButton })
+                                                               &releaseBox, &driverBox, &deviceBox, &bufferBox, &versionBox, &updateButton })
             c->setExplicitFocusOrder (order++);
 
         proc.changes.addChangeListener (this);
@@ -182,6 +262,9 @@ public:
         volumeSlider.setBounds (row (26));
         sensSlider.setBounds (row (26));
         releaseBox.setBounds (row (28));
+        if (dm != nullptr)
+            for (auto* b : { &driverBox, &deviceBox, &bufferBox })
+                b->setBounds (row (26));
         versionBox.setBounds (r.removeFromTop (26));
         r.removeFromTop (8);
         updateButton.setBounds (r.removeFromTop (30));
@@ -218,6 +301,48 @@ private:
         if (folderBox.getText() != folder)
             folderBox.setText (folder, dontSendNotification);
     }
+
+    void fillAudio()
+    {
+        filling = true;
+        driverBox.clear (dontSendNotification);
+        deviceBox.clear (dontSendNotification);
+        bufferBox.clear (dontSendNotification);
+        buffers.clear();
+        const auto cur = dm->getCurrentAudioDeviceType();
+        int id = 1;
+        for (auto* t : dm->getAvailableDeviceTypes())
+        {
+            driverBox.addItem (t->getTypeName(), id);
+            if (t->getTypeName() == cur) driverBox.setSelectedId (id, dontSendNotification);
+            ++id;
+        }
+        if (auto* t = dm->getCurrentDeviceTypeObject())
+        {
+            t->scanForDevices();
+            deviceBox.addItemList (t->getDeviceNames (false), 1);
+        }
+        if (auto* d = dm->getCurrentAudioDevice())
+        {
+            deviceBox.setText (d->getName(), dontSendNotification);
+            const double rate = d->getCurrentSampleRate() > 0 ? d->getCurrentSampleRate() : 44100.0;
+            id = 1;
+            for (auto b : d->getAvailableBufferSizes())
+            {
+                buffers.add (b);
+                bufferBox.addItem (String (b) + ro (" eșantioane, ") + String (b * 1000.0 / rate, 1).replaceCharacter ('.', ',') + " milisecunde", id);
+                if (b == d->getCurrentBufferSizeSamples()) bufferBox.setSelectedId (id, dontSendNotification);
+                ++id;
+            }
+        }
+        filling = false;
+    }
+
+    AudioDeviceManager* dm = nullptr;
+    bool filling = false;
+    ComboBox driverBox, deviceBox, bufferBox;
+    Label driverLabel, deviceLabel, bufferLabel;
+    Array<int> buffers;
 
     ToyProcessor& proc;
     std::function<void()> onFolderChosen;

@@ -43,6 +43,12 @@ target_compile_definitions(CeamakitosToy PUBLIC
   JUCE_DISPLAY_SPLASH_SCREEN=0
   TOY_VERSION_STRING="${TOY_VERSION}")
 
+# ASIO (pentru intarziere mica in aplicatie), daca SDK-ul Steinberg a fost descarcat in asiosdk/
+if(EXISTS "${CMAKE_SOURCE_DIR}/asiosdk/common/iasiodrv.h")
+  target_compile_definitions(CeamakitosToy PUBLIC JUCE_ASIO=1)
+  target_include_directories(CeamakitosToy PRIVATE "${CMAKE_SOURCE_DIR}/asiosdk/common")
+endif()
+
 if(MSVC)
   target_compile_options(CeamakitosToy PRIVATE /utf-8)
 endif()

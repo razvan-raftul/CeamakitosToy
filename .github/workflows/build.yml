@@ -14,6 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: ASIO SDK
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Invoke-WebRequest -Uri "https://www.steinberg.net/asiosdk" -OutFile asio.zip
+          Expand-Archive asio.zip -DestinationPath asiotmp
+          $c = Get-ChildItem asiotmp -Recurse -Filter iasiodrv.h | Select-Object -First 1
+          if ($c) { Move-Item $c.Directory.Parent.FullName asiosdk; Write-Output "ASIO SDK gasit" } else { Write-Output "::warning::ASIO SDK negasit" }
+
       - name: Configure
         run: cmake -B build -A x64 "-DTOY_VERSION=0.1.${{ github.run_number }}"
 
