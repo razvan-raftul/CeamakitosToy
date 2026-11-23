@@ -326,14 +326,13 @@ public:
         addButton.onClick = [this] { addSounds(); };
         addAndMakeVisible (addButton);
 
-        fillToggle.setButtonText (ro ("Umple clapele dintre note"));
-        fillToggle.setToggleState (fillFile().loadFileAsString().trim() != "0", dontSendNotification);
-        fillToggle.onClick = [this]
+        setupCombo (fillBox, fillLabel, ro ("Umple clapele dintre note"), { "Da", "Nu" });
+        fillBox.setSelectedItemIndex (fillFile().loadFileAsString().trim() == "0" ? 1 : 0, dontSendNotification);
+        fillBox.onChange = [this]
         {
             fillFile().getParentDirectory().createDirectory();
-            fillFile().replaceWithText (fillToggle.getToggleState() ? "1" : "0");
+            fillFile().replaceWithText (fillOn() ? "1" : "0");
         };
-        addAndMakeVisible (fillToggle);
 
         list.setModel (this);
         list.setTitle ("Sunetele instrumentului");
@@ -378,7 +377,7 @@ public:
         setupCombo (vhiBox, vhiLabel, ro ("Cel mai tare la care sună"), levels);
 
         int order = 1;
-        for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &fillToggle, &list, &listenButton,
+        for (Component* c : std::initializer_list<Component*> { &newName, &createButton, &instBox, &addButton, &fillBox, &list, &listenButton,
                                                                &learnButton, &removeButton, &loBox, &hiBox, &rootBox, &grpBox, &vloBox, &vhiBox })
             c->setExplicitFocusOrder (order++);
 
@@ -401,7 +400,7 @@ public:
         instBox.setBounds (row (26));
         addButton.setBounds (r.removeFromTop (28));
         r.removeFromTop (6);
-        fillToggle.setBounds (r.removeFromTop (24));
+        fillBox.setBounds (r.removeFromTop (24).withTrimmedLeft (labelW));
         r.removeFromTop (6);
         list.setBounds (r.removeFromTop (130));
         r.removeFromTop (6);
@@ -645,7 +644,7 @@ private:
         {
             const int n = notes[k];
             int lo, hi;
-            if (! fillToggle.getToggleState()) { lo = hi = n; }
+            if (! fillOn()) { lo = hi = n; }
             else if (notes.size() == 1) { lo = jmax (0, n - 24); hi = jmin (127, n + 24); }
             else
             {
@@ -749,7 +748,9 @@ private:
     TextButton createButton, addButton, listenButton, learnButton, removeButton;
     ComboBox instBox, loBox, hiBox, rootBox, grpBox, vloBox, vhiBox;
     SpokenList list;
-    ToggleButton fillToggle;
+    ComboBox fillBox;
+    Label fillLabel;
+    bool fillOn() const { return fillBox.getSelectedItemIndex() != 1; }
     static File fillFile()
     {
         return File::getSpecialLocation (File::userApplicationDataDirectory)
