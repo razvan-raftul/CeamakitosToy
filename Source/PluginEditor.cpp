@@ -145,7 +145,8 @@ private:
             if (announceNext)
             {
                 announceNext = false;
-                announce (st);
+                const int idx = proc.getCurrentIndex(), n = names.size();
+                announce (st + (n > 1 && idx == 0 ? ro (", primul") : n > 1 && idx == n - 1 ? ro (", ultimul") : String()));
             }
         }
     }

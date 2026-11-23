@@ -347,7 +347,7 @@ juce::String ToyProcessor::noteName (int note)
 {
     static const char* names[] = { "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si" };
     note = jlimit (0, 127, note);
-    return String (names[note % 12]) + String (note / 12 - 1) + " (" + String (note) + ")";
+    return String (names[note % 12]) + String (note / 12 - 1);
 }
 
 juce::File ToyProcessor::instrumentFolder (int index) const

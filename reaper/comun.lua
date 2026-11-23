@@ -69,7 +69,12 @@ function M.pas(d)
   if not tr then M.spune("Pune întâi pluginul Ceamakito's toy pe o pistă."); return end
   local n = M.numar(tr, fx)
   if n == 0 then M.spune("Alege întâi folderul cu instrumente, cu Alt 3."); return end
-  M.alege(tr, fx, ((M.curent(tr, fx) + d) % n + n) % n)
+  local i = ((M.curent(tr, fx) + d) % n + n) % n
+  local p = M.param(tr, fx, "Instrument")
+  reaper.TrackFX_SetParamNormalized(tr, fx, p, i / 199)
+  local t = M.nume(tr, fx, i)
+  if n > 1 and i == 0 then t = t .. ", primul" elseif n > 1 and i == n - 1 then t = t .. ", ultimul" end
+  M.spune(t)
 end
 
 function M.fisier_radacina()
