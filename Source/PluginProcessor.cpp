@@ -610,7 +610,7 @@ void ToyProcessor::render (AudioBuffer<float>& out, int start, int end)
         for (int i = start; i < end; ++i)
         {
             // cat tii clapa (si sunetul se opreste la ridicare), mijlocul se repeta in bucla
-            if (canLoop && v.stopMode && ! v.fading && v.pos >= z.loopEnd)
+            if (canLoop && v.stopMode && ! v.fast && v.pos >= z.loopEnd)
                 v.pos -= loopLen;
             const int p = (int) v.pos;
             if (p >= len)
@@ -622,7 +622,7 @@ void ToyProcessor::render (AudioBuffer<float>& out, int start, int end)
             float a = d0[p] + fr * (d0[p + 1] - d0[p]);
             float b = d1[p] + fr * (d1[p + 1] - d1[p]);
             // spre capatul buclei se amesteca lin cu inceputul ei, ca sa nu se auda saritura
-            if (canLoop && v.stopMode && ! v.fading && z.xfade > 0 && p >= z.loopEnd - z.xfade && p < z.loopEnd)
+            if (canLoop && v.stopMode && ! v.fast && z.xfade > 0 && p >= z.loopEnd - z.xfade && p < z.loopEnd)
             {
                 const double q = v.pos - loopLen;
                 const int pq = (int) q;
