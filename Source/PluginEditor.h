@@ -18,7 +18,7 @@ public:
     void moveTab (int delta, bool absolute = false);
 };
 
-class ToyEditor : public juce::AudioProcessorEditor
+class ToyEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
     explicit ToyEditor (ToyProcessor&);
@@ -31,6 +31,8 @@ public:
 private:
     void focusTab (int index);
     void toggleKeyboard();
+    void timerCallback() override;
+    bool wasActive = false;
 
     ToyProcessor& proc;
     ToyTabs tabs;

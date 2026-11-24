@@ -1193,29 +1193,31 @@ ToyEditor::ToyEditor (ToyProcessor& p)
     // ca Tab sa treaca din rand in fila deschisa si inapoi (Shift Tab)
     tabs.getTabbedButtonBar().setFocusContainerType (FocusContainerType::none);
 
-    // cand fereastra devine activa si nimic nu are focus, punem cursorul pe fila aleasa
-    SafePointer<ToyEditor> safe (this);
-    auto tries = std::make_shared<int> (0);
-    auto focusTabs = std::make_shared<std::function<void()>>();
-    *focusTabs = [safe, tries, focusTabs]
-    {
-        if (safe == nullptr || ++(*tries) > 40)
-            return;
-        auto* peer = safe->getPeer();
-        const bool active = peer != nullptr && peer->isFocused();
-        if (safe->isShowing() && active && ! safe->hasKeyboardFocus (true))
-        {
-            if (auto* b = safe->tabs.getTabbedButtonBar().getTabButton (safe->tabs.getCurrentTabIndex()))
-                b->grabKeyboardFocus();
-            return;
-        }
-        if (! safe->hasKeyboardFocus (true))
-            Timer::callAfterDelay (250, *focusTabs);
-    };
-    Timer::callAfterDelay (300, *focusTabs);
+    // urmareste fereastra: cand pleci din ea se opreste claviatura, cand revii cursorul ajunge
+    // pe un loc pe care NVDA il citeste (inainte ramanea pe claviatura ascunsa si NVDA tacea)
+    startTimer (250);
 }
 
-ToyEditor::~ToyEditor() = default;
+void ToyEditor::timerCallback()
+{
+    auto* peer = getPeer();
+    const bool active = isShowing() && peer != nullptr && peer->isFocused();
+    if (! active && wasActive && keys->isVisible())
+    {
+        keys->allOff();
+        keys->setVisible (false);
+    }
+    if (active && ! hasKeyboardFocus (true))
+    {
+        if (tabs.getCurrentTabIndex() == 0 && play != nullptr && play->instrumentBox.isShowing())
+            play->instrumentBox.grabKeyboardFocus();
+        else if (auto* b = tabs.getTabbedButtonBar().getTabButton (tabs.getCurrentTabIndex()))
+            b->grabKeyboardFocus();
+    }
+    wasActive = active;
+}
+
+ToyEditor::~ToyEditor() { stopTimer(); }
 
 void ToyEditor::paint (Graphics& g)
 {
