@@ -194,6 +194,15 @@ public:
         sensSlider.textFromValueFunction = [] (double v) { return String (roundToInt (v * 100.0)) + ro (" la sută"); };
         sensSlider.updateText();
 
+        setupLabel (tailLabel, ro ("Cât durează stingerea după ce ridici clapa"), tailSlider);
+        tailSlider.setSliderStyle (Slider::LinearHorizontal);
+        tailSlider.setTextBoxStyle (Slider::NoTextBox, true, 0, 0);
+        addAndMakeVisible (tailSlider);
+        tailAtt = std::make_unique<SA> (proc.apvts, "stingere", tailSlider);
+        tailSlider.setWantsKeyboardFocus (true);
+        tailSlider.textFromValueFunction = [] (double v) { return String (v, 1).replaceCharacter ('.', ',') + " secunde"; };
+        tailSlider.updateText();
+
         setupLabel (releaseLabel, "La ridicarea clapei", releaseBox);
         releaseBox.addItemList ({ ro ("Sunetul continuă până la capăt"), ro ("Sunetul se oprește") }, 1);
         addAndMakeVisible (releaseBox);
@@ -244,7 +253,7 @@ public:
         }
 
         int order = 1;
-        for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &volumeSlider, &sensSlider,
+        for (Component* c : std::initializer_list<Component*> { &chooseButton, &folderBox, &volumeSlider, &sensSlider, &tailSlider,
                                                                &releaseBox, &octBox, &driverBox, &deviceBox, &bufferBox, &versionBox, &updateButton })
             c->setExplicitFocusOrder (order++);
 
@@ -264,6 +273,7 @@ public:
         auto row = [&r] (int h) { auto x = r.removeFromTop (h); r.removeFromTop (8); return x.withTrimmedLeft (250); };
         volumeSlider.setBounds (row (26));
         sensSlider.setBounds (row (26));
+        tailSlider.setBounds (row (26));
         releaseBox.setBounds (row (28));
         octBox.setBounds (row (26));
         if (dm != nullptr)
@@ -417,13 +427,13 @@ private:
     std::function<void()> onFolderChosen;
     TextButton updateButton;
     TextEditor folderBox, versionBox;
-    Label volumeLabel, sensLabel, releaseLabel;
-    Slider volumeSlider, sensSlider;
+    Label volumeLabel, sensLabel, releaseLabel, tailLabel;
+    Slider volumeSlider, sensSlider, tailSlider;
     ComboBox releaseBox;
 
     using SA = AudioProcessorValueTreeState::SliderAttachment;
     using CA = AudioProcessorValueTreeState::ComboBoxAttachment;
-    std::unique_ptr<SA> volumeAtt, sensAtt;
+    std::unique_ptr<SA> volumeAtt, sensAtt, tailAtt;
     std::unique_ptr<CA> releaseAtt;
     std::unique_ptr<FileChooser> chooser;
 };

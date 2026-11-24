@@ -51,6 +51,11 @@ AudioProcessorValueTreeState::ParameterLayout ToyProcessor::createLayout (ToyPro
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { "ridicare", 1 }, ro ("La ridicarea clapei"),
                                                         StringArray { ro ("Sunetul continuă până la capăt"),
                                                                       ro ("Sunetul se oprește") }, 0));
+
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { "stingere", 1 },
+                                                       ro ("Cât durează stingerea după ce ridici clapa"),
+                                                       NormalisableRange<float> (0.02f, 5.0f, 0.01f, 0.4f), 0.6f,
+                                                       AudioParameterFloatAttributes().withLabel ("s")));
     return layout;
 }
 
@@ -64,6 +69,7 @@ ToyProcessor::ToyProcessor()
     volumeParam  = apvts.getRawParameterValue ("volum");
     sensParam    = apvts.getRawParameterValue ("sensibilitate");
     releaseParam = apvts.getRawParameterValue ("ridicare");
+    tailParam = apvts.getRawParameterValue ("stingere");
 
     apvts.addParameterListener ("instrument", this);
     apvts.addParameterListener ("reincarca", this);
@@ -474,6 +480,26 @@ std::shared_ptr<Instrument> ToyProcessor::build (const File& dir)
         z.data.setSize (ch, len + 1);
         z.data.clear();
         reader->read (&z.data, 0, len, 0, true, ch > 1);
+
+        // bucla: intai punctele scrise in WAV, altfel o bucata din mijloc (pentru sunete de cel putin o secunda)
+        const auto& md = reader->metadataValues;
+        int ls = md.getValue ("Loop0Start", "-1").getIntValue();
+        int le = md.getValue ("Loop0End", "-1").getIntValue();
+        if (md.getValue ("NumSampleLoops", "0").getIntValue() < 1 || ls < 0 || le <= ls + 64 || le >= len)
+        {
+            ls = le = 0;
+            if (len >= (int) z.sampleRate)
+            {
+                ls = (int) (len * 0.35);
+                le = (int) (len * 0.75);
+            }
+        }
+        if (le > ls)
+        {
+            z.loopStart = ls;
+            z.loopEnd   = le;
+            z.xfade     = jmin ((int) (0.08 * z.sampleRate), (le - ls) / 3, ls);
+        }
         inst->zones.push_back (std::move (z));
     }
 
@@ -505,7 +531,7 @@ void ToyProcessor::noteOn (int note, int velocity)
     if (z.group > 0)
         for (auto& v : voices)
             if (v.active && v.group == z.group)
-                v.fading = true;
+                v.fading = v.fast = true;
 
     Voice* slot = nullptr;
     for (auto& v : voices)
@@ -521,6 +547,9 @@ void ToyProcessor::noteOn (int note, int velocity)
     const float s = sensParam->load();
     slot->active = true;
     slot->fading = false;
+    slot->fast   = false;
+    slot->held   = true;
+    slot->stopMode = z.stop == 1 || (z.stop == 0 && releaseParam->load() >= 0.5f);
     slot->zone   = zi;
     slot->note   = note;
     slot->group  = z.group;
@@ -536,15 +565,19 @@ void ToyProcessor::noteOff (int note)
 {
     const bool general = releaseParam->load() >= 0.5f;
     for (auto& v : voices)
-        if (v.active && v.note == note && (v.stop == 1 || (v.stop == 0 && general)))
-            v.fading = true;
+        if (v.active && v.note == note && v.held)
+        {
+            v.held = false;
+            if (v.stop == 1 || (v.stop == 0 && general))
+                v.fading = true;   // stingere lina, cat e setat in Setari
+        }
 }
 
 void ToyProcessor::fadeAll()
 {
     for (auto& v : voices)
         if (v.active)
-            v.fading = true;
+            v.fading = v.fast = true;
 }
 
 void ToyProcessor::render (AudioBuffer<float>& out, int start, int end)
@@ -569,9 +602,16 @@ void ToyProcessor::render (AudioBuffer<float>& out, int start, int end)
         const int len = z.data.getNumSamples() - 1;
         const float* d0 = z.data.getReadPointer (0);
         const float* d1 = z.data.getNumChannels() > 1 ? z.data.getReadPointer (1) : d0;
+        const bool canLoop = z.loopEnd > z.loopStart && z.loopEnd < len;
+        const double loopLen = (double) (z.loopEnd - z.loopStart);
+        const double tail = jmax (0.02, (double) tailParam->load());
+        const float relMul = (float) std::exp (std::log (0.001) / (tail * hostRate));
 
         for (int i = start; i < end; ++i)
         {
+            // cat tii clapa (si sunetul se opreste la ridicare), mijlocul se repeta in bucla
+            if (canLoop && v.stopMode && ! v.fading && v.pos >= z.loopEnd)
+                v.pos -= loopLen;
             const int p = (int) v.pos;
             if (p >= len)
             {
@@ -579,8 +619,19 @@ void ToyProcessor::render (AudioBuffer<float>& out, int start, int end)
                 break;
             }
             const float fr = (float) (v.pos - p);
-            const float a = d0[p] + fr * (d0[p + 1] - d0[p]);
-            const float b = d1[p] + fr * (d1[p + 1] - d1[p]);
+            float a = d0[p] + fr * (d0[p + 1] - d0[p]);
+            float b = d1[p] + fr * (d1[p + 1] - d1[p]);
+            // spre capatul buclei se amesteca lin cu inceputul ei, ca sa nu se auda saritura
+            if (canLoop && v.stopMode && ! v.fading && z.xfade > 0 && p >= z.loopEnd - z.xfade && p < z.loopEnd)
+            {
+                const double q = v.pos - loopLen;
+                const int pq = (int) q;
+                const float fq = (float) (q - pq);
+                const float t = (float) ((v.pos - (z.loopEnd - z.xfade)) / z.xfade);
+                const float ga = std::cos (t * MathConstants<float>::halfPi), gb = std::sin (t * MathConstants<float>::halfPi);
+                a = a * ga + (d0[pq] + fq * (d0[pq + 1] - d0[pq])) * gb;
+                b = b * ga + (d1[pq] + fq * (d1[pq + 1] - d1[pq])) * gb;
+            }
             const float g = v.gain * v.level;
 
             if (R != nullptr) { L[i] += a * g; R[i] += b * g; }
@@ -588,8 +639,9 @@ void ToyProcessor::render (AudioBuffer<float>& out, int start, int end)
 
             if (v.fading)
             {
-                v.level -= fadeStep;
-                if (v.level <= 0.0f)
+                if (v.fast) v.level -= fadeStep;
+                else        v.level *= relMul;
+                if (v.level <= 0.001f)
                 {
                     v.active = false;
                     break;

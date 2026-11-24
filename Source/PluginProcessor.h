@@ -14,6 +14,8 @@ struct Zone
     int lo = 0, hi = 127, root = 60, vlo = 0, vhi = 127, group = 0, stop = 0;
     double sampleRate = 44100.0;
     juce::AudioBuffer<float> data;
+    // bucla cat tii clapa: din punctele WAV-ului sau aleasa singur; loopEnd 0 = fara bucla
+    int loopStart = 0, loopEnd = 0, xfade = 0;
 };
 
 struct Instrument
@@ -120,7 +122,7 @@ private:
 
     struct Voice
     {
-        bool active = false, fading = false;
+        bool active = false, fading = false, fast = false, held = false, stopMode = false;
         int zone = 0, note = 0, group = 0, stop = 0;
         double pos = 0.0, step = 1.0;
         float gain = 1.0f, level = 1.0f;
@@ -131,6 +133,7 @@ private:
     juce::uint32 ageCounter = 0, roundRobin = 0;
     double hostRate = 44100.0;
     float fadeStep = 0.003f;
+    std::atomic<float>* tailParam = nullptr;
 
     std::atomic<float>* volumeParam = nullptr;
     std::atomic<float>* sensParam = nullptr;
