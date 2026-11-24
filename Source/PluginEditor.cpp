@@ -1202,17 +1202,39 @@ void ToyEditor::timerCallback()
 {
     auto* peer = getPeer();
     const bool active = isShowing() && peer != nullptr && peer->isFocused();
-    if (! active && wasActive && keys->isVisible())
+
+    if (active)
     {
-        keys->allOff();
-        keys->setVisible (false);
+        auto* f = Component::getCurrentlyFocusedComponent();
+        const bool mine = f != nullptr && (f == this || isParentOf (f));
+
+        if (! wasActive || ! mine)
+        {
+            // ai revenit: cursorul merge exact unde l-ai lasat
+            Component* target = lastFocus.getComponent();
+            if (target != nullptr && target->isShowing())
+            {
+                if (target != f)
+                    target->grabKeyboardFocus();
+                if (target == keys.get())
+                    speak (ro ("Claviatură pornită"));
+            }
+            else if (! mine)
+            {
+                if (tabs.getCurrentTabIndex() == 0 && play != nullptr && play->instrumentBox.isShowing())
+                    play->instrumentBox.grabKeyboardFocus();
+                else if (auto* t = tabs.getTabbedButtonBar().getTabButton (tabs.getCurrentTabIndex()))
+                    t->grabKeyboardFocus();
+            }
+        }
+        else
+        {
+            lastFocus = f;   // tine minte unde esti
+        }
     }
-    if (active && ! hasKeyboardFocus (true))
+    else if (wasActive)
     {
-        if (tabs.getCurrentTabIndex() == 0 && play != nullptr && play->instrumentBox.isShowing())
-            play->instrumentBox.grabKeyboardFocus();
-        else if (auto* b = tabs.getTabbedButtonBar().getTabButton (tabs.getCurrentTabIndex()))
-            b->grabKeyboardFocus();
+        keys->allOff();   // nicio nota nu ramane agatata cat esti in alta fereastra
     }
     wasActive = active;
 }

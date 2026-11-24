@@ -33,6 +33,7 @@ private:
     void toggleKeyboard();
     void timerCallback() override;
     bool wasActive = false;
+    juce::Component::SafePointer<juce::Component> lastFocus;
 
     ToyProcessor& proc;
     ToyTabs tabs;
